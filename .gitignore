@@ -1,0 +1,13 @@
+__pycache__/
+.pytest_cache/
+.venv/
+dist/
+*.pokeplugin
+*.part
+*.pem
+*.key
+*.sav
+*.gba
+*.pk3
+*.ek3
+*.bin

@@ -1,0 +1,40 @@
+name: Check plugin
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+      - uses: actions/checkout@v4
+        with:
+          repository: Decryptu/pokeldn
+          ref: 4780dcaeac52479e6212483009f64f348581d7cc
+          path: host
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r requirements.txt -r ../plugin/requirements-dev.txt
+        working-directory: host
+      - name: Check committed guest and plugin
+        working-directory: plugin
+        env:
+          POKELDN_SOURCE: ${{ github.workspace }}/host
+        run: |
+          python -m ruff check .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest -q
+      - name: Pack plugin using the pinned host
+        run: |
+          New-Item -ItemType Directory -Force plugin/dist | Out-Null
+          python host/scripts/pack_plugin.py plugin -o plugin/dist/frlg-rng-assist-0.3.0.pokeplugin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frlg-rng-assist-test-package
+          path: plugin/dist/*.pokeplugin
