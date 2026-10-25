@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.6 — 2026-10-25
+
+- Keep a failed attempt's D reason in red for 60 visible map frames (about one second) before resuming search. Television / menu time and the held-L seed view do not consume the notice, and no A is sent during it. Continue tracking the actual RNG throughout, then catch up within the original range and filters.
+- Colour a locked countdown amber when the current index and the automatic-A deadline have different parity, green when they match and the callback is ready. Include the encounter's offset in that comparison; retain the target through colour changes rather than predicting future strides from a single sample.
+- Reproduce 0.3.5's immediately disappearing TV-overrun notice in compiled-code tests. Cover TV-sized RNG bursts without losing future targets, notices after returning to the map, all timing / callback reasons, and unchanged one-shot input / range / epoch limits. Hardware feedback and automatic-A timing still need console confirmation.
+
 ## 0.3.5 — 2026-10-25
 
 - Automatically search a later candidate after an actual miss, busy frame, scene / Mewtwo wait mismatch, changed pending RNG or expired callback. Briefly show the D reason, resume when the normal map / main loop is available, and preserve the original seed, configured range and filters. Do not discard B targets early or press an old deadline late.

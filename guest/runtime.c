@@ -19,12 +19,16 @@ __attribute__((section(".config"), used)) volatile struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
 /* Keep existing timing / Mewtwo reason numbers; retired bird gates have no code. */
 enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIRED };
-struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason, locked; };
+struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason, locked, notice; };
 __attribute__((section(".state"), used)) volatile struct State state = {0};
 #define C config
 #define S state
 
 static u32 step(u32 v) { return v * 0x41C64E6D + 0x6073; }
+
+static void miss(u32 reason) {
+    S.reason = reason; S.notice = 60; S.status = MISSED;
+}
 
 /* Exact distance for this full-period LCG, one binary bit per iteration. */
 __attribute__((noinline)) u32 distance(u32 from, u32 to) {
@@ -62,7 +66,7 @@ __attribute__((noinline)) void press_shim(void) {
         if (!reason) {
             S.status = FIRED;
             U16(C.main + 0x2E) |= 1;
-        } else { S.reason = reason; S.status = MISSED; }
+        } else miss(reason);
     }
     U16(0x04000208) = ime;
     ((callback)C.cb1)();
@@ -136,7 +140,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
     /* A second interrupt before callback1 means the pending press has expired. */
     if (S.status == PENDING) {
         if (U32(C.main) == (u32)press_shim) U32(C.main) = C.cb1;
-        S.reason = EXPIRED; S.status = MISSED;
+        miss(EXPIRED);
     }
     if (U32(C.main + 4) == C.cb2) {
         for (u32 i = 0; i < 8; ++i) {
@@ -159,21 +163,21 @@ __attribute__((section(".entry"), used)) void hook(void) {
     S.index = index;
     u32 reason = readiness();
     u32 stable = idle && delta == 2 && !reason;
-    /* Show each missed attempt once, then resume from a strictly later candidate.
-     * The search catch-up below rebases from the live RNG when time has moved on.
-     * Reseeds / rewinds above invalidate the epoch instead of taking this path. */
-    if (S.status == MISSED && (S.shown >> 28) == 13 && idle && overworld()) {
+    /* Keep the reason visible for 60 map frames before looking ahead again.
+     * TV / menus do not consume that notice; tracking continues throughout.
+     * Catch-up rebases from the live RNG, within the original range / epoch. */
+    if (S.status == MISSED && !S.notice && idle && overworld()) {
         ++S.next; S.cursor = step(S.cursor); S.locked = 0; S.status = SEARCH;
     }
     if (S.status == FOUND) {
         u32 press = S.target - C.offset;
         /* Check initial two-call parity before showing B. Once the countdown is
          * visible its target is fixed: a single observed stride cannot predict
-         * future strides. An actual miss retries a later candidate next pass. */
-        if (S.index > press) { S.reason = PASSED; S.status = MISSED; }
+         * future strides. An actual miss shows its notice before retrying. */
+        if (S.index > press) miss(PASSED);
         else if (S.index == press) {
             if (idle && !reason) { S.status = PENDING; U32(C.main) = (u32)press_shim; }
-            else { S.reason = idle ? reason : LAG; S.status = MISSED; }
+            else miss(idle ? reason : LAG);
         } else if (!S.locked && idle) {
             if (stable && ((press - S.index) & 1)) {
                 ++S.next; S.cursor = step(S.cursor); S.status = SEARCH;
@@ -209,7 +213,10 @@ __attribute__((section(".entry"), used)) void hook(void) {
     else display = 15;
     S.shown = (display << 28) | bcd(n);
     if (U32(C.main + 4) == C.cb2) {
-        u32 color = S.status == FOUND && S.locked ? (reason ? 0x02FF : 0x03E0) : 0x7FFF;
+        if (S.status == MISSED && S.notice && !(U16(C.main + 0x2C) & 0x200)) --S.notice;
+        u32 color = S.status == MISSED ? 0x001F
+            : S.status == FOUND && S.locked
+                ? (reason || ((S.target - C.offset - S.index) & 1) ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;
         U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
         tiles();

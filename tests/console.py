@@ -23,7 +23,8 @@ PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
 STATES = (
-    "initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status", "reason", "locked"
+    "initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status", "reason", "locked",
+    "notice",
 )
 
 
@@ -160,3 +161,14 @@ class Console:
         self.write(self.profile["main"] + 0x2E, 0, 2)  # ReadKeys
         self.call(self.read(self.profile["main"]))
         return self.read(self.profile["main"] + 0x2E, 2)
+
+    def resume_after_notice(self):
+        assert self.s("status") == 4
+        reason = self.s("reason")
+        for _ in range(61):
+            self.frame(self.s("index") + 2)
+            if self.s("status") != 4:
+                return
+            assert self.s("shown") == 0xD0000000 + int(str(reason), 16)
+            assert self.main_loop() == 0
+        raise AssertionError("notice did not resume within 61 map frames")

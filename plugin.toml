@@ -1,6 +1,6 @@
 id = "frlg-rng-assist"
 name = "FRLG RNG Assist"
-version = "0.3.5"
+version = "0.3.6"
 api = "1.11"
 author = "axechaso"
 description = "超梦与三鸟 RNG 辅助：设置 advances 范围和条件，掌机显示 seed / 倒计时，到点自动 A；支持捕获核对与离线搜索。"

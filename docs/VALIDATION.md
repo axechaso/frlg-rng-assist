@@ -1,4 +1,4 @@
-# 0.3.5 validation record
+# 0.3.6 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
 
@@ -18,6 +18,10 @@ The user rejected 0.3.4's terminal miss behavior. Version 0.3.5 shows the failed
 
 The new miss-to-retry regression failed against the 0.3.4 image before rebuilding. Software coverage includes four consecutive misses before a later one-shot A, recovery after busy frames / menu / Mewtwo script / object / changed RNG / expired callbacks, exact range-end candidates, exhaustion, and rejection of reseeds / rewinds. Positive shiny and nature / IV retries independently locate candidates with the public predictor and verify the eventual generated seed. None of these are new physical-console observations.
 
+On 0.3.5 the user reported countdowns returning to A with no readable failure explanation, including after Teachy TV. Read-only checks of the installed manifest and latest installation report confirm 0.3.5, Articuno, shiny-only, and range 3000..200000. The user then confirmed that the TV case had actually advanced past the target. This establishes an inadequate notice, not a TV reseed or a demonstrated fix to automatic-A timing.
+
+Version 0.3.6 holds the red D reason for 60 visible map frames before retrying; time spent in TV / menus does not consume it. The live RNG keeps advancing throughout. The new TV-burst / return-to-map regression fails against the previous compiled image, which switches directly to a new countdown without displaying the missed attempt on the map. The rebuilt image retains future targets, shows the overrun after returning, and resumes within the original range / epoch. Other recoverable failure reasons are checked through the same notice and subsequent one-shot A. Parity colour changes are checked against the automatic-A deadline, including the encounter offset, while retaining the same target. New colour assertions fail before rebuilding that change.
+
 ## Previous installer correction (0.3.1)
 
 The user's English FireRed (BPRE) session connected through COM8 and executed the installer, but returned **`0xBAD00004`**, with host exit code 1 and no activated resident hook. Production version 0.3.0 had interpreted `english_names.BRACKETED` in the wrong direction: its keys are French addresses, and the stored offset must be added for English. The corrected Thumb targets are `0x0800059D` for English and `0x08000585` for French.
@@ -33,7 +37,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**299 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**335 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -51,8 +55,10 @@ Coverage includes:
 - All four builds and all three birds produce exactly one A at the selected deadline with no held buttons, never before it, and restore callback1. Scheduled and sent C states are distinct.
 - Bird direction input, active scripts, absent objects, movement, changed position, wrong facing and incompatible elevations do not gate A. Each condition is tested before scheduling and after scheduling / ReadKeys, covering both former validation points.
 - Distinct D reasons are displayed before retrying timing failures, scene changes and Mewtwo's script / interaction-object requirements. Retired bird refusal codes are no longer generated.
+- A D reason stays red for 60 visible map frames with no input injection before retrying. TV-sized 312-call animation bursts plus the substitute VBlank's one call retain a future target and catch up exactly; an actual overrun waits until map return to display its reason. TV time and the held-L seed view cannot consume the notice. This models RNG consumption and scene transitions, not actual TV ROM execution.
+- Yellow / green countdown colours compare current advances to the automatic-A deadline, rather than the PID-generation index. Temporary parity changes never discard a visible B target.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1792 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1864 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 

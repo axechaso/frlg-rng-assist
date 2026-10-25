@@ -363,6 +363,7 @@ def test_visible_countdown_keeps_its_target_through_transient_stride_changes(cod
         c.frame(current)
         assert c.s("shown") >> 28 == 0xB
         assert c.s("target") == 20000
+        assert c.read(c.profile["palette"], 2) == (0x02FF if (press - current) & 1 else 0x03E0)
         assert c.main_loop() == 0
     c.frame(press)
     assert c.main_loop() == 1
@@ -372,8 +373,100 @@ def test_visible_countdown_keeps_its_target_through_transient_stride_changes(cod
 
 @pytest.mark.parametrize("code", PROFILES)
 @pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_miss_reason_is_red_and_readable_for_sixty_map_frames_before_retry(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=21000)
+    offset = c.plan["auto_a_offset_advances"]
+    start = 3500 + ((20000 - offset) & 1)
+    c.frame(start)
+    c.frame(start + 2)
+    deadline = c.s("target") - offset
+    c.frame(deadline + 1)
+    for frame in range(60):
+        if frame:
+            c.frame(c.s("index") + 2)
+        assert c.s("shown") == 0xD0000009
+        assert c.read(c.profile["palette"], 2) == 0x001F
+        assert c.s("initial") == c.seed
+        assert c.s("target") == 20000
+        assert c.main_loop() == 0
+    c.frame(c.s("index") + 2)
+    assert c.s("shown") >> 28 in (0xA, 0xB)
+    assert c.s("target") > 20000
+    c.frame(c.s("target") - offset)
+    assert c.main_loop() == 1
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_holding_l_does_not_consume_a_miss_reason_hidden_by_the_seed_view(code):
+    c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
+    c.frame(3500)
+    c.frame(3502)
+    c.frame(19999)
+    assert c.s("shown") == 0xD0000009
+    c.write(c.profile["main"] + 0x2C, 0x200, 2)
+    for _ in range(90):
+        c.frame(c.s("index") + 2)
+        assert c.s("status") == 4
+        assert c.main_loop() == 0
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    for _ in range(59):
+        c.frame(c.s("index") + 2)
+        assert c.s("shown") == 0xD0000009
+        assert c.read(c.profile["palette"], 2) == 0x001F
+    c.frame(c.s("index") + 2)
+    assert c.s("shown") >> 28 in (0xA, 0xB)
+    assert not c.presses
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_tv_bursts_keep_a_future_target_and_report_an_overrun_after_returning_to_map(code, target):
+    # TeachyTvBg2AnimController calls Random 12 * 26 times per update;
+    # the substitute VBlank adds one more. This models consumption and scene
+    # changes, not the TV's actual ROM callbacks or console cycle timing.
+    c = Console(code, target, criteria=Criteria(shiny=False), first=50000, last=100000)
+    offset = c.plan["auto_a_offset_advances"]
+    start = 3500 + ((50000 - offset) & 1)
+    c.frame(start)
+    c.frame(start + 2)
+    generation = c.s("generation")
+    assert c.s("shown") >> 28 == 0xB
+    c.set_overworld(False)
+    for _ in range(64):
+        c.frame(c.s("index") + 313)
+        assert c.s("target") == 50000
+        assert c.s("generation") == generation
+        assert c.s("status") == 2
+    c.set_overworld()
+    c.frame(c.s("index") + 2)
+    assert c.s("shown") >> 28 == 0xB
+    assert c.s("target") == 50000
+    c.set_overworld(False)
+    c.frame(50000 - offset + 1)
+    for _ in range(90):
+        c.frame(c.s("index") + 313)
+        assert c.s("status") == 4
+    c.set_overworld()
+    c.set_ready()
+    for _ in range(60):
+        c.frame(c.s("index") + 2)
+        assert c.s("shown") == 0xD0000009
+        assert c.read(c.profile["palette"], 2) == 0x001F
+        assert c.main_loop() == 0
+    c.frame(c.s("index") + 2)
+    assert c.s("shown") >> 28 in (0xA, 0xB)
+    assert c.s("target") > c.s("index") + offset
+    assert c.s("generation") == c.lcg.advance(c.seed, c.s("target"))
+    c.frame(c.s("target") - offset)
+    assert c.main_loop() == 1
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
 def test_visible_countdown_retries_only_after_an_actual_miss_and_hits_the_range_endpoint(code, target):
-    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=20005)
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=20123)
     press = 20000 - c.plan["auto_a_offset_advances"]
     start = 3500 + (press & 1)
     c.frame(start)
@@ -387,19 +480,19 @@ def test_visible_countdown_retries_only_after_an_actual_miss_and_hits_the_range_
     c.frame(press + 1)  # The engine really skipped past the exact press advance.
     assert c.s("shown") == 0xD0000009
     assert c.main_loop() == 0
-    c.frame(press + 3)
+    c.resume_after_notice()
     assert c.s("status") == 2
-    assert c.s("target") == c.plan["range"]["last"] == 20005
-    assert c.s("generation") == c.lcg.advance(c.seed, 20005)
+    assert c.s("target") == c.plan["range"]["last"] == 20123
+    assert c.s("generation") == c.lcg.advance(c.seed, 20123)
     assert c.s("shown") == 0xB0000002
     assert c.main_loop() == 0
     assert not c.presses
-    c.frame(20005 - c.plan["auto_a_offset_advances"])
+    c.frame(20123 - c.plan["auto_a_offset_advances"])
     assert c.main_loop() == 1
     assert c.s("initial") == c.seed
     assert c.s("status") == 7
-    assert c.presses[0][0] == c.lcg.advance(c.seed, 20005)
-    for index in (20006, 20008, 20010):
+    assert c.presses[0][0] == c.lcg.advance(c.seed, 20123)
+    for index in (20124, 20126, 20128):
         c.frame(index)
         assert c.main_loop() == 0
     assert len(c.presses) == 1
@@ -419,7 +512,7 @@ def test_repeated_misses_keep_searching_until_one_future_candidate_is_pressed(co
         assert c.s("shown") == 0xD0000009
         assert c.main_loop() == 0
         assert not c.presses
-        c.frame(deadline + 3)
+        c.resume_after_notice()
         assert c.s("status") == 2
         assert 20000 < c.s("target") <= 21000
         assert c.s("target") - offset > c.s("index")
@@ -443,10 +536,10 @@ def test_retry_never_extends_the_configured_range_when_all_candidates_are_past(c
     deadline = 20000 - c.plan["auto_a_offset_advances"]
     c.frame(deadline + 1)
     assert c.s("shown") == 0xD0000009
-    c.frame(deadline + 3)
+    c.resume_after_notice()
     assert c.s("shown") == 0xE0000000
     assert c.main_loop() == 0
-    c.frame(deadline + 5)
+    c.frame(c.s("index") + 2)
     assert c.s("shown") == 0xE0000000
     assert c.main_loop() == 0
     assert not c.presses
@@ -478,7 +571,7 @@ def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_s
         assert c.s("status") == 4  # Wait for the map callback before resuming.
         c.set_overworld()
     c.set_ready()
-    c.frame(deadline + 3)
+    c.resume_after_notice()
     assert c.s("status") == 2
     assert c.s("target") > 20000
     assert c.main_loop() == 0
@@ -533,7 +626,7 @@ def test_retry_preserves_filters_and_rebases_from_the_live_rng_after_a_large_ski
         if (index - offset) % 2 == 0 and criteria.matches(predict(seed, 12345, 2791)):
             if not candidates:
                 candidates.append(index)
-            elif index - candidates[0] < 64:
+            elif index - candidates[0] < 256:
                 candidates[0] = index
             else:
                 candidates.append(index)
@@ -546,10 +639,12 @@ def test_retry_preserves_filters_and_rebases_from_the_live_rng_after_a_large_ski
     c.frame(3502)
     assert c.s("target") == first
     assert c.s("shown") >> 28 == 0xB
-    c.frame(last - offset - 16)  # Large real advance loss, but the same initial seed.
+    c.frame(last - offset - 160)  # Large skip, with room for the visible notice before the next target.
     assert c.s("shown") == 0xD0000009
     assert c.main_loop() == 0
-    c.frame(last - offset - 14)
+    c.resume_after_notice()
+    while c.s("status") == 1 and c.s("index") < last - offset:
+        c.frame(c.s("index") + 2)
     assert c.s("target") == last
     assert c.s("generation") == c.lcg.advance(c.seed, last)
     c.frame(last - offset)
