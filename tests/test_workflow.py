@@ -31,6 +31,32 @@ def test_preview_exports_a_real_gift_without_starting_a_host(tmp_path, monkeypat
     assert json.loads(capsys.readouterr().out)["range"]["origin"] == "title_reseed_initial_seed"
 
 
+@pytest.mark.parametrize("target,offset,base,total", [
+    ("articuno", None, 2, 5), ("mewtwo", None, 1, 3),
+    ("articuno", 0, 2, 2), ("articuno", 3, 2, 5),
+    ("mewtwo", 3, 1, 4), ("moltres", 253, 2, 255),
+])
+def test_preview_records_effective_offset_and_preserves_range(tmp_path, target, offset, base, total, capsys):
+    output = tmp_path / "offset.json"
+    args = ["--preview", "--target", target, "--start", "3000", "--end", "200000",
+            "--output", str(output), "--json"]
+    if offset is not None:
+        args += ["--offset", str(offset)]
+    assert install.main(args) == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["offset_advances"] == total - base
+    assert report["auto_a_base_offset_advances"] == base
+    assert report["auto_a_offset_advances"] == total
+    assert report["range"]["first"] == 3000 and report["range"]["last"] == 200000
+    assert json.loads(capsys.readouterr().out)["auto_a_offset_advances"] == total
+
+
+@pytest.mark.parametrize("offset", [-1, 254, True, "3"])
+def test_invalid_offset_is_rejected_before_building_a_gift(offset):
+    with pytest.raises(ValueError, match="Offset"):
+        install_plan("firered", "auto", "articuno", offset=offset)
+
+
 @pytest.mark.parametrize("statuses", [[], [0xBAD00005], [ACK, ACK]])
 def test_failed_ack_does_not_create_an_installed_report(tmp_path, monkeypatch, statuses):
     monkeypatch.setattr(install, "run_gift", lambda *a, **k: statuses)

@@ -19,12 +19,18 @@ class Encounter:
     offset: int
 
 
+# This plugin requires the wireless RFU draw before callback1 (press_shim).
+# Native-script completion yields even when successful: Mewtwo generates on
+# pass 2, birds on pass 3 after lock. From the post-VBlank sample this costs
+# RFU + VBlank + RFU = 3, or RFU + VBlank + RFU + VBlank + RFU = 5.
+# The upstream offsets 1 / 2 do not cover this wireless script path.
 ENCOUNTERS = {
-    "mewtwo": Encounter("超梦", 150, "mewtwo", 139, 1),
-    "articuno": Encounter("急冻鸟", 144, "birds", 138, 2),
-    "zapdos": Encounter("闪电鸟", 145, "birds", 136, 2),
-    "moltres": Encounter("火焰鸟", 146, "birds", 137, 2),
+    "mewtwo": Encounter("超梦", 150, "mewtwo", 139, 3),
+    "articuno": Encounter("急冻鸟", 144, "birds", 138, 5),
+    "zapdos": Encounter("闪电鸟", 145, "birds", 136, 5),
+    "moltres": Encounter("火焰鸟", 146, "birds", 137, 5),
 }
+BASE_PRESS_OFFSETS = {"mewtwo": 1, "birds": 2}
 GAMES = {"firered": "火红", "leafgreen": "叶绿"}
 GAME_ORIGINS = {"firered": 4, "leafgreen": 5}
 ACK = 0x524E4703
@@ -97,7 +103,7 @@ def validate_context(game, build, target):
             raise ValueError("游戏与卡带代码不匹配")
 
 
-def install_plan(game, build, target, *, first=10000, last=200000, criteria=None):
+def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -106,6 +112,8 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
     if criteria.pid is not None:
         raise ValueError("实机搜索仅支持闪光、性格及 IV 条件；精确 PID 请使用离线搜索")
     encounter = ENCOUNTERS[target]
+    base_offset = BASE_PRESS_OFFSETS[encounter.profile]
+    extra_offset = encounter.offset - base_offset if offset is None else bounded(offset, 0, 253, "Offset")
     return {
         "kind": "native_install",
         "status": "prepared",
@@ -124,7 +132,9 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         },
         "criteria": asdict(criteria),
         "method": 1,
-        "auto_a_offset_advances": encounter.offset,
+        "offset_advances": extra_offset,
+        "auto_a_base_offset_advances": base_offset,
+        "auto_a_offset_advances": base_offset + extra_offset,
         "rng_tracking": "on_console_from_actual_initial_seed",
         "volatile": True,
         "result_verified": False,
@@ -155,7 +165,7 @@ def resident(plan, code):
         multiplier,
         increment,
         encounter.graphics,
-        encounter.offset,
+        plan["auto_a_offset_advances"],
         int(criteria["shiny"]),
         255 if criteria["nature"] is None else criteria["nature"],
         *(criteria["iv_min"][i] for i in order),

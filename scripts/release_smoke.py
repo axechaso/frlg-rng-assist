@@ -20,6 +20,23 @@ def main():
     plugin_root = Path(frlg_rng_assist_core.__file__).resolve().parent.parent
     if args.expect_plugin_root:
         assert plugin_root == Path(args.expect_plugin_root).resolve()
+    import plugin
+
+    assert Path(plugin.__file__).resolve().parent == plugin_root
+
+    class Catalog:
+        def __init__(self):
+            self.tools = []
+
+        def add_tool(self, game, tool):
+            assert game == "frlg"
+            self.tools.append(tool)
+
+    catalog = Catalog()
+    plugin.register(catalog)
+    installer = next(tool for tool in catalog.tools if tool.key == "frlg-rng-assist-install")
+    offset_field = next(field for field in installer.fields if field.flag == "--offset")
+    assert offset_field.kind == "number" and offset_field.default == "" and not offset_field.hidden
     work = Path(args.work).resolve()
     work.mkdir(exist_ok=True)
     lcg, _ = backend()
@@ -28,7 +45,12 @@ def main():
     assert {"generation_seed": seed, "method": 1} in recover(mon["personality"], mon["ivs"])
     results = []
     for game, target in (("firered", "mewtwo"), ("leafgreen", "articuno")):
-        plan = install_plan(game, "auto", target, criteria=Criteria(shiny=False))
+        plan = install_plan(
+            game, "auto", target, criteria=Criteria(shiny=False),
+            offset=3 if target == "articuno" else None,
+        )
+        assert plan["offset_advances"] == (3 if target == "articuno" else 2)
+        assert plan["auto_a_offset_advances"] == (5 if target == "articuno" else 3)
         gift = work / f"{game}.pokegift"
         exported = work / f"{game}-host-export.pokegift"
         info = write_gift(plan, gift)

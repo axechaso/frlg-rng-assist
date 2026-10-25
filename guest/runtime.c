@@ -46,10 +46,10 @@ __attribute__((noinline)) u32 distance(u32 from, u32 to) {
 static int overworld(void) { return U32(C.main) == C.cb1 && U32(C.main + 4) == C.cb2; }
 
 /* Birds send A at the deadline; the user is responsible for positioning.
- * Mewtwo retains its measured script-button-wait timing profile. */
+ * Mewtwo still requires its script-button-wait timing profile. */
 __attribute__((noinline)) u32 readiness(void) {
     if (!overworld()) return NOT_OVERWORLD;
-    if (C.offset != 1) return 0;
+    if (C.graphics != 139) return 0;
     u32 object = U8(C.selected);
     if (U8(C.context + 1) != 2 || U32(C.context + 4) != C.wait) return SCRIPT;
     return object < 16
@@ -58,8 +58,9 @@ __attribute__((noinline)) u32 readiness(void) {
 }
 
 /* Runs after ReadKeys and HandleLinkConnection, exactly once. RfuMain1 draws
- * Random before callback1 even with its manager shut down. The measured
- * post-VBlank offsets (Mewtwo 1, birds 2) already include this one draw.
+ * Random before callback1 even with its manager shut down. The default
+ * post-VBlank offsets (Mewtwo 3, birds 5) include the RFU draw on every
+ * script pass, plus the VBlanks between the script's native yields.
  * Require that exact successor; extra draws / reseeds still cancel the A. */
 __attribute__((noinline)) void press_shim(void) {
     u32 ime = U16(0x04000208);

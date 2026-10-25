@@ -1,5 +1,12 @@
 # Changes
 
+## 0.3.9 — 2026-10-25
+
+- Add a visible extra Offset field and CLI option, in RNG advances. Blank uses birds 3 / Mewtwo 2; 0 restores the old press timing, and 0..253 is accepted. Add it to the existing baseline of birds 2 / Mewtwo 1. Keep generation targets unchanged; pack the resulting deadline into the guest, use it for countdown / parity, and record all three values in installation reports. Test explicit offsets against the compiled guest and reject invalid values before transfer.
+- Correct the wireless script-generation timing. A successful native-script wait still returns for that pass: Mewtwo resumes bytecode on the next pass, and birds yield first at lock and then at lock-wait completion. Counting RFU on every pass and VBlank between passes gives post-VBlank offsets 3 / 5, replacing 1 / 2. Keep Mewtwo's wait / object check keyed to its encounter, independent of the numerical offset.
+- Reproduce the user's C76F case against the compiled 0.3.8 guest: a green target at 3351 / PID 1D138B25 presses at 3349 but the script-phase fixture produces 3354 / PID 4762A09B. The corrected profile presses at 3346 and the model produces the target. This changes the eligible candidate parity and the countdown to the press, not the requested generation index.
+- Replace the immediate remaining-draw assumption in the test callback with an explicit source-based per-pass script fixture. Cover RFU and VBlank across lock / native completion for all encounters, the reported PID pair and the corrected compiled guest on all builds. Update earlier hardcoded deadlines. The fixture forecasts script completion; it does not execute a game ROM. Corrected hardware timing remains pending.
+
 ## 0.3.8 — 2026-10-25
 
 - Hold L+R on the map to view the last current party member's full eight-digit hexadecimal PID in white, with its party position (1..6) below. Release R to return to L's existing initial-seed view, or release both for the normal overlay. R alone does not switch views. Continue RNG tracking, search and one-shot A while viewing; retain hidden D notices until the ordinary display is visible again.
@@ -7,6 +14,8 @@
 - Cover every supported build and party size, visible PID digits including leading zeros, live changes, invalid-count read boundaries, L / L+R / R switching, hidden notices, menus and exact one-shot A during PID viewing. Hardware display and timing acceptance remain pending.
 
 ## 0.3.7 — 2026-10-25
+
+The claim below that the total offsets already covered this draw was incorrect; 0.3.9 supersedes that timing assumption and the corresponding synthetic generation fixture.
 
 - Fix repeated D11 cancellation at an otherwise valid deadline. On the measured wireless path, `HandleLinkConnection` calls `RfuMain1`, which draws `Random()` before callback1. The shim now requires the exact successor of the post-VBlank seed, rather than the unchanged seed. The existing overall Mewtwo / bird offsets already include that draw and remain 1 / 2 advances. Missing or additional draws still cancel the A.
 - Correct the synthetic main loop to include the link draw. Model remaining generation draws separately from the configured offset, so accepting A cannot silently move the predicted PID seed by one. Reproduce all 16 build / encounter failures against 0.3.6 before rebuilding, then cover exact generation seeds, one-shot input, missing / extra draws, and existing retry / colour / notice behavior.

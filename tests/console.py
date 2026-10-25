@@ -6,6 +6,7 @@ from unicorn import arm_const as a
 from frlg_rng_assist_core.backend import backend, predict
 from frlg_rng_assist_core.native import PROFILES, guest, install_plan, payloads
 from pokeldn.frlg.rom.english_names import BRACKETED
+from encounter_timing import generation_trace
 
 # This upstream table is keyed by FRENCH addresses, not English addresses.
 # Build the ROM fixture independently of the plugin's address being tested.
@@ -16,13 +17,6 @@ ROM_GETTERS = {
     code: FRENCH_GETTER + (ENGLISH_OFFSET if code.endswith("E") else 0)
     for code in ("BPRE", "BPGE", "BPRF", "BPGF")
 }
-
-# Independent phase model for the measured wireless path. AgbMain runs ReadKeys,
-# HandleLinkConnection -> RfuMain1 -> Random, then callback1/callback2. The
-# upstream post-VBlank offsets already include that first draw: generation at
-# Mewtwo's button wait has none left, and the birds' talk path has one left.
-# Do not derive these remaining draws from the plugin's configured offset.
-CALLBACK_DRAWS_TO_GENERATION = {"mewtwo": 0, "articuno": 1, "zapdos": 1, "moltres": 1}
 
 STOP = 0x02030000
 BUFFER = 0x0201C000
@@ -46,6 +40,7 @@ class Console:
         first=20000,
         last=200000,
         install=True,
+        offset=None,
     ):
         self.code, self.profile, self.manifest = code, PROFILES[code], guest()
         self.plan = install_plan(
@@ -55,6 +50,7 @@ class Console:
             first=first,
             last=last,
             criteria=criteria,
+            offset=offset,
         )
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
         for base, size in (
@@ -104,9 +100,11 @@ class Console:
             self.phases.append(("vblank", self.read(self.profile["rng"])))
         if address == self.profile["cb1"] & ~1 and self.read(self.profile["main"] + 0x2E, 2) & 1:
             self.phases.append(("callback1_a", self.read(self.profile["rng"])))
-            seed = self.lcg.advance(
-                self.read(self.profile["rng"]), CALLBACK_DRAWS_TO_GENERATION[self.plan["target"]]
-            )
+            # Forecast script completion from explicit per-pass yields, not a
+            # configured number of immediate generation draws. main_loop has
+            # already applied the first RFU draw; the trace starts before it.
+            post_vblank = self.lcg.advance(self.read(self.profile["rng"]), 0xFFFFFFFF)
+            seed, _ = generation_trace(post_vblank, self.plan["target"], self.lcg)
             self.presses.append((seed, predict(seed, 12345, 2791)))
 
     def _write(self, uc, access, address, size, value, user):

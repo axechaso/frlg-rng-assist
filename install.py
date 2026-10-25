@@ -18,6 +18,7 @@ def build_parser():
     parser.add_argument("--enable-auto-a", action="store_true", help="安装并启用到点自动 A")
     parser.add_argument("--start", type=int, default=10000, help="从标题实际初始 seed 起算的 advance 下限")
     parser.add_argument("--end", type=int, default=200000, help="advance 上限，含端点，最大 9999999")
+    parser.add_argument("--offset", type=int, help="额外提前量 0..253 advances；留空使用三鸟 3 / 超梦 2")
     parser.add_argument("--nature", type=nature, help="性格：中文、英文或 0..24；留空不限")
     parser.add_argument("--iv-min", type=ivs, default=(0, 0, 0, 0, 0, 0))
     parser.add_argument("--iv-max", type=ivs, default=(31, 31, 31, 31, 31, 31))
@@ -32,7 +33,7 @@ def main(argv=None):
     try:
         criteria = Criteria(not args.allow_normal, args.nature, None, args.iv_min, args.iv_max)
         plan = install_plan(
-            args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria
+            args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria, offset=args.offset
         )
         if not args.preview and not args.enable_auto_a:
             raise ValueError("请勾选「安装并启用自动 A」；只检查配置可选择「仅预览」。")
@@ -69,6 +70,7 @@ def main(argv=None):
             print("同时按住 L+R 查看队尾：上排白色 8 位十六进制 PID，下排队伍位置 1..6；松开恢复，查看不暂停计时或自动 A。")
             print("L/R 打开帮助时，先将 OPTIONS → BUTTON MODE 设为 L/R 并保存；本插件不单独识别 ZL/ZR。")
             print("倒计时：与自动 A 时机奇偶不一致为黄色，一致且当前可触发为绿色；不代表站位已就绪。")
+            print(f"额外 Offset={plan['offset_advances']} advances；合计在目标生成前 {plan['auto_a_offset_advances']} advances 排定 A。")
             if args.target == "mewtwo":
                 print("超梦：提前对话，等叫声和文字结束，停在按键等待；之后不要再手动按 A/B。")
             else:
@@ -87,6 +89,7 @@ def main(argv=None):
                 f"目标\t{plan['target_name']}",
                 f"状态\t{'仅预览' if args.preview else '安装回执已确认'}",
                 f"范围\t{args.start}..{args.end} advances（从标题初始 seed 起算）",
+                f"额外 Offset\t{plan['offset_advances']} advances（总提前量 {plan['auto_a_offset_advances']}）",
                 "实机验证\t尚未完成",
                 "捕获结果\t等待核对",
             ],

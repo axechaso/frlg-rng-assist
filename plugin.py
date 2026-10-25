@@ -61,6 +61,12 @@ def register(api):
                     default="200000",
                     help="最大 9999999；范围针对生成 PID 前的 RNG 状态。",
                 ),
+                Field(
+                    "--offset",
+                    "额外 Offset（advances）",
+                    "number",
+                    help="0..253；在基础按 A 时机上额外提前。留空：三鸟 3、超梦 2。本次急冻鸟填 3；范围仍对应最终生成目标。",
+                ),
                 Field("--nature", "性格（留空不限）", help="中文名、英文名或 0..24。首测留空。"),
                 Field(
                     "--iv-min",

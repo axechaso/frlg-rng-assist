@@ -9,11 +9,17 @@ The Gen III record conversion in `frlg_rng_assist_core/pk3.py` is adapted from
 `readout.py` (AGPL-3.0), copyright their respective contributors. The tests' GBA
 memory setup follows `tests/test_shiny.py` from that project, under the same license.
 
-The standalone GBA implementation in `guest/` uses the encounter offsets and
+The standalone GBA implementation in `guest/` originally used the encounter offsets and
 memory layout documented by PokeLDN's `shiny.inc`, `follower.s`, `builds.py`,
 `english_names.py` and `docs/frlg_rom.md`, with attribution to their respective
 contributors. The font data is adapted from `asm/resident/overlay.inc`. The loader
 follows the ARM-to-THUMB entry convention of `asm/install-resident.s`.
+
+The wireless timing profile in 0.3.9 also accounts for native-script yields and
+the RFU draw on each main-loop pass, using pret/pokefirered's `src/script.c`,
+`src/scrcmd.c`, `src/event_object_lock.c`, `src/link_rfu_2.c`, `src/main.c` and
+the legendary encounter scripts. `tests/encounter_timing.py` is a source-based
+phase model, not bundled ROM code or a full game emulator.
 
 This plugin uses documented API 1.11 and the public catalog launcher; it does not
 bundle the PokeLDN host or any ROM, save, prod.keys, or private signing key.

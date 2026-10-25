@@ -1,6 +1,29 @@
-# 0.3.8 validation record
+# 0.3.9 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
+
+## Wireless generation timing (0.3.9)
+
+The user confirmed initial seed **C76F**, intended Method-1 index **3351 / PID 1D138B25**, and actual **3354 / PID 4762A09B**, while the countdown remained green. Public LCG prediction reproduces both PIDs at those zero-based pre-PID advance indices; this screenshot's tool uses that same index convention. This is a three-advance miss, not evidence of three video frames or a parity-check arithmetic failure.
+
+The 0.3.7/0.3.8 test callback wrongly assumed that generation followed immediately after its configured remaining draws. The actual [RunScriptCommand](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/script.c) returns for the current pass after a successful native function, even though it sets bytecode mode. The birds' [script](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/data/maps/SeafoamIslands_B4F/scripts.inc) first yields at `lock`, completes its stationary freeze task after the script pass, yields again at native completion, then runs `faceplayer` / `setwildbattle`. On the wireless branch, [RfuMain1](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/link_rfu_2.c) draws once before callbacks on **every** pass.
+
+From the guest's post-VBlank sample to the state before the first PID draw, the source-based normal path is:
+
+| Encounter | Script passes | RFU draws | Intervening VBlank draws | Total offset |
+| --- | --- | --- | --- | --- |
+| Mewtwo, already at native button wait | wait completes; bytecode resumes | 2 | 1 | 3 |
+| Birds, talk press | lock; native completion; bytecode resumes | 3 | 2 | 5 |
+
+This assumes stationary objects, no lag and no unrelated draws. No B, positioning or object gates were added. The shim still requires exactly one RFU draw before callback1. Mewtwo's script and selected-object checks now identify its encounter independently of the changed offset.
+
+Before changing production profiles, the new C76F positive regression failed on all four builds. An isolated run of the committed 0.3.8 compiled guest with the source-phase fixture displays green, schedules at index 3349, and forecasts the reported actual PID at 3354. The corrected profile schedules at 3346 and forecasts 3351 / PID 1D138B25 with the same IVs as the public predictor. The new profile and colour check therefore select the parity of **target - 5**, instead of target - 2. It can skip a formerly selected candidate when that earlier press is unreachable; the requested generation index is unchanged.
+
+`tests/encounter_timing.py` models individual script yields, RFU draws and intervening VBlanks without importing production offsets. It replaces the immediate remaining-draw assumption in the synthetic callback. These are source-based forecasts alongside real compiled guest execution, **not actual game-ROM execution**. The reported physical miss supports this mechanism, but no device trace was collected and the 0.3.9 correction remains unconfirmed on hardware. Development evidence is in ignored `dist/c76f-038-repro.json` and the C76F regression tests.
+
+## Configurable extra Offset (0.3.9)
+
+The visible numeric field and `--offset` accept 0..253 additional RNG advances relative to the previous baseline (birds 2 / Mewtwo 1). Blank selects birds 3 / Mewtwo 2, giving the corrected default totals 5 / 3. Installation reports retain the extra, baseline and total values. The packed guest uses that total for the press deadline, countdown and parity while retaining the requested generation target. Across all four builds, C76F tests exercise explicit bird offsets 0, 3 and 4: the script fixture forecasts actual indices 3354, 3351 and 3350 respectively for the same intended index 3351. CLI preview tests cover defaults, explicit zero, the upper bound and invalid values. Frozen-host smoke checks also verify that the field is visible and that an explicit value reaches the installer plan.
 
 ## Live tail PID display (0.3.8)
 
@@ -14,7 +37,7 @@ The user reports repeatable D11 at reachable deadlines with matching parity on 0
 
 The old synthetic main loop omitted that draw too. Before changing runtime.c or rebuilding guest.json, the corrected phase model failed the positive regression for all four builds and four encounters. An isolated comparison of the previous committed image and the rebuilt image records D11 / no A for 0.3.6 and one A for 0.3.7. This reproduces a source-supported mechanism consistent with the hardware report; no console RNG trace was collected to establish the cause on the device directly.
 
-The shim now requires exactly step(post-VBlank seed). It does not accept arbitrary changes or press the old target late. The measured total offsets stay Mewtwo 1 / birds 2: after the link draw, the synthetic generation callback consumes 0 / 1 remaining draws respectively. Those callback draws are independently specified by encounter, rather than copied from the production offset. Tests verify the exact generation state at absolute advance 20000, normal shiny / nature / IV results, one-shot A and callback restoration. Zero, two or three draws before the callback still produce D11 without A for every build / encounter. This profile covers the measured wireless path; a path without its expected draw is deliberately rejected, as its generation timing has not been calibrated here.
+The shim requires exactly step(post-VBlank seed), and still rejects zero, two or three draws before callback1. It does not accept arbitrary changes or press an old target late. The 0.3.7 claim that total offsets 1 / 2 already covered the wireless path was incorrect: its generation fixture consumed 0 / 1 immediate remaining draws and omitted native-script yields. That assumption is superseded by the 0.3.9 per-pass fixture and offsets 3 / 5 above. A path without the expected RFU draw is deliberately rejected, because this profile requires that wireless branch.
 
 The previous parity colours, 60 visible map frames of miss notice, original-range retries, and terminal success / exhaustion / invalid-epoch behavior remain covered. Neither the corrected source model nor these tests establish hardware input reception or exact bird generation timing after controls are released.
 
@@ -53,7 +76,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**469 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**500 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -75,7 +98,7 @@ Coverage includes:
 - A D reason stays red for 60 visible map frames with no input injection before retrying. TV-sized 312-call animation bursts plus the substitute VBlank's one call retain a future target and catch up exactly; an actual overrun waits until map return to display its reason. TV time and the held-L seed view cannot consume the notice. This models RNG consumption and scene transitions, not actual TV ROM execution.
 - Yellow / green countdown colours compare current advances to the automatic-A deadline, rather than the PID-generation index. Temporary parity changes never discard a visible B target.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1944 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1940 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 
@@ -92,8 +115,8 @@ The smoke test uses paths with spaces and the app's existing child Python proces
 
 ## What these checks do not prove
 
-No retail / Switch ROM was run in the synthetic-memory tests. The model substitutes the original VBlank and callback code, includes the source-backed wireless link draw before callback1, and models the remaining encounter draws separately. Therefore this suite cannot establish real script timing, sprite availability, interrupt cycle budgets or console stability across the title transition.
+No retail / Switch ROM was run in the synthetic-memory tests. The model substitutes the original VBlank and callback code, includes the source-backed wireless link draw before callback1, and forecasts generation through native-script yields with RFU and VBlank on subsequent passes. Therefore this suite cannot establish real script timing, sprite availability, interrupt cycle budgets or console stability across the title transition.
 
-No physical console / board session has been completed for this version. The bird offset remains two advances, originally measured upstream with B held; the released-controls path and actual generated result remain **unverified on hardware**. Follow `HARDWARE_TEST_ZH.md`: first test unrestricted normal encounters, then shiny encounters. IV restrictions are not a first-round acceptance requirement.
+No physical console / board session has been completed for this version. The new wireless offsets are three advances for Mewtwo and five for birds. The source-phase model explains the reported three-advance Articuno miss, but the corrected automatic-A / generation timing remains **unverified on hardware**. Follow `HARDWARE_TEST_ZH.md`; users who have already confirmed automatic battle entry can repeat their original shiny search with IVs unrestricted and compare the actual PID.
 
 The package is a local test artifact. No upstream PR or release is part of this test handoff.

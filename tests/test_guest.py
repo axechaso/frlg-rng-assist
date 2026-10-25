@@ -45,17 +45,17 @@ def test_lr_reads_last_live_party_pid_for_every_party_size_and_restores_countdow
     c.write(GPLAYER_PARTY_COUNT, 0xEFCDAB00 | count)  # Only the count byte is valid.
     before = bytes(c.uc.mem_read(GPLAYER_PARTY, 600))
     c.write(c.profile["main"] + 0x2C, 0x300, 2)
-    c.frame(3500)
+    c.frame(3501)
     assert overlay_values(c) == (pids[count - 1], count)
     assert c.read(c.profile["palette"], 2) == 0x7FFF
-    assert c.s("index") == 3500
+    assert c.s("index") == 3501
     assert c.s("target") == 20000
     c.write(c.profile["main"] + 0x2C, 0x100, 2)  # R alone restores normal display.
-    c.frame(3502)
+    c.frame(3503)
     assert overlay_values(c) == (c.s("seed"), c.s("shown"))
-    assert c.s("shown") == 0xB0016496
+    assert c.s("shown") == 0xB0016492
     c.write(c.profile["main"] + 0x2C, 0, 2)
-    c.frame(3504)
+    c.frame(3505)
     assert overlay_values(c) == (c.s("seed"), c.s("shown"))
     assert c.s("initial") == c.seed
     assert bytes(c.uc.mem_read(GPLAYER_PARTY, 600)) == before
@@ -88,17 +88,17 @@ def test_lr_refreshes_pid_and_party_size_live_and_returns_to_l_view_when_r_is_re
     c.write(GPLAYER_PARTY, 0x11112222)
     c.write(GPLAYER_PARTY + 100, 0xAABBCCDD)
     c.write(c.profile["main"] + 0x2C, 0x300, 2)  # R + L: PID view.
-    c.frame(3500)
+    c.frame(3501)
     assert overlay_values(c) == (0xAABBCCDD, 2)
     c.write(GPLAYER_PARTY + 100, 0x0000FFFF)
-    c.frame(3502)
+    c.frame(3503)
     assert overlay_values(c) == (0x0000FFFF, 2)
     c.write(GPLAYER_PARTY_COUNT, 1, 1)
-    c.frame(3504)
+    c.frame(3505)
     assert overlay_values(c) == (0x11112222, 1)
     c.write(c.profile["main"] + 0x2C, 0x200, 2)  # R released: existing L view.
-    c.frame(3506)
-    assert overlay_values(c) == (c.seed, 0x3506)
+    c.frame(3507)
+    assert overlay_values(c) == (c.seed, 0x3507)
     assert c.s("target") == 20000
 
 
@@ -138,9 +138,9 @@ def test_lr_does_not_draw_over_a_menu(code):
 @pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
 def test_wireless_link_draw_before_callback_is_expected_and_preserves_generation_seed(code, target):
     c = Console(code, target, criteria=Criteria(shiny=False))
-    # Independent measured post-VBlank deadlines, rather than deriving the
+    # Independent source-phase post-VBlank deadlines, rather than deriving the
     # encounter's remaining script consumption from the configured offset.
-    deadline = 19999 if target == "mewtwo" else 19998
+    deadline = 19997 if target == "mewtwo" else 19995
     c.frame(3500)
     c.frame(deadline)
     assert c.s("status") == 6
@@ -164,7 +164,7 @@ def test_wireless_link_draw_before_callback_is_expected_and_preserves_generation
 @pytest.mark.parametrize("rfu_calls", [0, 2, 3])
 def test_callback_rejects_missing_or_additional_draws_instead_of_pressing_the_wrong_seed(code, target, rfu_calls):
     c = Console(code, target, criteria=Criteria(shiny=False))
-    deadline = 19999 if target == "mewtwo" else 19998
+    deadline = 19997 if target == "mewtwo" else 19995
     c.frame(3500)
     c.frame(deadline)
     assert c.s("status") == 6
@@ -257,7 +257,7 @@ def test_absolute_advances_start_from_title_seed_not_first_overworld(code):
     c.frame(3971)  # More than 64 consumes, e.g. load/extra RNG; no invented zero.
     assert c.s("index") == 3971
     assert c.s("target") == 20000
-    assert c.s("shown") == int("B0016028", 16)  # 20000 - 3971 - Mewtwo's one advance.
+    assert c.s("shown") == int("B0016026", 16)  # 20000 - 3971 - wireless Mewtwo offset 3.
 
 
 def test_distance_machine_code_matches_public_lcg_for_all_bits():
@@ -349,7 +349,7 @@ def test_real_shiny_candidate_is_found_over_multiple_batches_and_pressed_once(co
 def test_never_presses_when_target_cannot_be_hit(condition):
     c = Console(criteria=Criteria(shiny=False))
     c.frame(3500)
-    at = 19999
+    at = 19997
     if condition == "menu":
         c.set_overworld(False)
     if condition == "not_ready":
@@ -374,7 +374,7 @@ def test_never_presses_when_target_cannot_be_hit(condition):
 def test_pending_shim_expires_on_second_interrupt_without_late_press():
     c = Console(criteria=Criteria(shiny=False))
     c.frame(3500)
-    c.frame(19999)
+    c.frame(19997)
     assert c.s("status") == 6
     c.frame(20000, lag=True)
     assert c.s("status") == 4
@@ -406,17 +406,17 @@ def test_birds_press_once_at_deadline_without_any_held_button(code, target):
     # The old B gate refused this hardware attempt instead of sending A.
     c = Console(code, target, criteria=Criteria(shiny=False))
     assert c.read(c.profile["main"] + 0x2C, 2) == 0
-    c.frame(3500)
+    c.frame(3501)
     assert c.s("status") == 2
     assert c.s("reason") == 0
     assert c.s("shown") == 0xA0020000  # One provisional sample, not yet the fixed B countdown.
     assert c.read(c.profile["palette"], 2) == 0x7FFF
-    c.frame(3502)
+    c.frame(3503)
     assert c.s("locked") == 1
-    assert c.s("shown") == 0xB0016496
+    assert c.s("shown") == 0xB0016492
     assert c.read(c.profile["palette"], 2) == 0x03E0
     assert c.main_loop() == 0  # Never press before the selected advance.
-    c.frame(19998)
+    c.frame(19995)
     assert c.s("shown") == 0xC0000001
     assert not c.presses
     assert c.main_loop() == 1
@@ -438,7 +438,7 @@ def test_birds_do_not_gate_a_on_controls_or_player_and_target_state(target, when
     c = Console(target=target, criteria=Criteria(shiny=False))
     c.frame(3500)
     if when == "after_readkeys":
-        c.frame(19998)
+        c.frame(19995)
         assert c.s("status") == 6
     objects = c.profile["objects"]
     if change == "direction_held":
@@ -457,7 +457,7 @@ def test_birds_do_not_gate_a_on_controls_or_player_and_target_state(target, when
     if change == "elevation":
         c.write(objects + 11, 4, 1)
     if when == "before_deadline":
-        c.frame(19998)
+        c.frame(19995)
     assert c.s("status") == 6
     assert c.main_loop() == 1
     assert c.s("status") == 7
@@ -470,7 +470,7 @@ def test_no_stores_to_rng_pokemon_save_blocks_or_rom(held):
     c.write(c.profile["party_count"], 6, 1)
     c.write(c.profile["main"] + 0x2C, held, 2)
     c.frame(3500)
-    c.frame(19999)
+    c.frame(19997)
     c.main_loop()
     p = c.profile
     allowed = [
@@ -504,10 +504,10 @@ def test_stationary_two_advance_stride_reselects_a_reachable_target():
     assert c.s("target") == 20000
     assert c.s("shown") == 0xA0020000
     c.frame(3502)
-    assert c.s("target") == 20001  # Mewtwo's press index 20000 is reachable from an even index.
-    assert c.s("shown") == 0xB0016498
+    assert c.s("target") == 20001  # Wireless Mewtwo's press index 19998 is even.
+    assert c.s("shown") == 0xB0016496
     assert c.s("locked") == 1
-    c.frame(20000)
+    c.frame(19998)
     assert c.main_loop() == 1
     assert c.s("status") == 7
 
@@ -570,7 +570,7 @@ def test_seed_and_pid_views_do_not_consume_a_hidden_miss_reason(code, held):
     c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3500)
     c.frame(3502)
-    c.frame(19999)
+    c.frame(19997)
     assert c.s("shown") == 0xD0000009
     c.write(c.profile["main"] + 0x2C, held, 2)
     for _ in range(90):
@@ -591,7 +591,7 @@ def test_seed_and_pid_views_do_not_consume_a_hidden_miss_reason(code, held):
 def test_r_alone_does_not_hide_or_pause_the_miss_notice(code):
     c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3500)
-    c.frame(19999)
+    c.frame(19997)
     notice = c.s("notice")
     c.write(c.profile["main"] + 0x2C, 0x100, 2)
     c.frame(20001)
@@ -731,7 +731,7 @@ def test_retry_never_extends_the_configured_range_when_all_candidates_are_past(c
 def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_success(code, problem):
     c = Console(code, criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3501)
-    deadline, reason = 19999, {"lag": 10, "menu": 4, "script": 3, "target": 5, "rng": 11, "expired": 12}[problem]
+    deadline, reason = 19997, {"lag": 10, "menu": 4, "script": 3, "target": 5, "rng": 11, "expired": 12}[problem]
     if problem == "menu":
         c.set_overworld(False)
     if problem == "script":
@@ -757,7 +757,7 @@ def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_s
     assert c.s("target") > 20000
     assert c.main_loop() == 0
     generation = c.s("generation")
-    c.frame(c.s("target") - 1)
+    c.frame(c.s("target") - c.plan["auto_a_offset_advances"])
     assert c.main_loop() == 1
     assert c.s("status") == 7
     assert c.presses[0][0] == generation
