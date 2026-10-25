@@ -79,7 +79,7 @@ B 一旦显示就保留目标，颜色变化不提前换目标。实际错过才
 
 ## 开发
 
-独立仓库，无远程发布地址；不要向 PokeLDN 原仓库添加插件目录。开发环境为 Python 3.13，宿主固定 v0.39.1 / 4780dcaeac52479e6212483009f64f348581d7cc。
+源码仓库：[axechaso/frlg-rng-assist](https://github.com/axechaso/frlg-rng-assist)。插件独立开发和分发。开发环境为 Python 3.13，宿主固定 v0.39.1 / 4780dcaeac52479e6212483009f64f348581d7cc。每次推送由 GitHub Actions 检查并生成测试包。
 
     python -m pip install -r requirements-dev.txt
     $env:POKELDN_SOURCE = 'D:\path\to\pokeldn-v0.39.1'
