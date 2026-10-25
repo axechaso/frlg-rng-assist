@@ -253,7 +253,7 @@ def test_absolute_advances_start_from_title_seed_not_first_overworld(code):
     assert c.s("initial") == 0x1234
     assert c.s("index") == 3500
     assert c.s("target") == 20000
-    assert c.s("shown") == int("A0020000", 16)  # Candidate is not a visible countdown until confirmed.
+    assert c.s("shown") == int("B0016497", 16)
     c.frame(3971)  # More than 64 consumes, e.g. load/extra RNG; no invented zero.
     assert c.s("index") == 3971
     assert c.s("target") == 20000
@@ -345,15 +345,13 @@ def test_real_shiny_candidate_is_found_over_multiple_batches_and_pressed_once(co
     assert c.presses[0][0] == generation
 
 
-@pytest.mark.parametrize("condition", ["lag", "menu", "not_ready", "passed", "changed_seed", "rewind"])
+@pytest.mark.parametrize("condition", ["lag", "menu", "passed", "changed_seed", "rewind"])
 def test_never_presses_when_target_cannot_be_hit(condition):
     c = Console(criteria=Criteria(shiny=False))
     c.frame(3500)
     at = 19997
     if condition == "menu":
         c.set_overworld(False)
-    if condition == "not_ready":
-        c.write(c.profile["context"] + 1, 0, 1)
     if condition == "passed":
         at += 1
     if condition == "changed_seed":
@@ -362,8 +360,8 @@ def test_never_presses_when_target_cannot_be_hit(condition):
         at = 3000
     c.frame(at, lag=condition == "lag")
     assert c.s("status") in (4, 5)
-    if condition in ("lag", "menu", "not_ready", "passed"):
-        reason = {"lag": 10, "menu": 4, "not_ready": 3, "passed": 9}[condition]
+    if condition in ("lag", "menu", "passed"):
+        reason = {"lag": 10, "menu": 4, "passed": 9}[condition]
         assert c.s("reason") == reason
         assert c.s("shown") == 0xD0000000 + int(str(reason), 16)
     if condition != "menu":
@@ -383,20 +381,18 @@ def test_pending_shim_expires_on_second_interrupt_without_late_press():
     assert not c.presses
 
 
-@pytest.mark.parametrize("change", ["rng", "context", "bird_scene"])
+@pytest.mark.parametrize("change", ["rng", "scene", "bird_scene"])
 def test_shim_rechecks_scene_and_rng_after_readkeys(change):
     c = Console(target="zapdos" if change.startswith("bird") else "mewtwo", criteria=Criteria(shiny=False))
     c.frame(3500)
     c.frame(20000 - c.plan["auto_a_offset_advances"])
     if change == "rng":
         c.write(c.profile["rng"], c.lcg.step(c.read(c.profile["rng"])))
-    if change == "context":
-        c.write(c.profile["context"] + 1, 0, 1)
-    if change == "bird_scene":
+    if change in ("scene", "bird_scene"):
         c.write(c.profile["main"] + 4, 0x0807C419)
     assert c.main_loop() == 0
     assert c.s("status") == 4
-    assert c.s("reason") == {"rng": 11, "context": 3, "bird_scene": 4}[change]
+    assert c.s("reason") == {"rng": 11, "scene": 4, "bird_scene": 4}[change]
 
 
 @pytest.mark.parametrize("code", PROFILES)
@@ -409,8 +405,8 @@ def test_birds_press_once_at_deadline_without_any_held_button(code, target):
     c.frame(3501)
     assert c.s("status") == 2
     assert c.s("reason") == 0
-    assert c.s("shown") == 0xA0020000  # One provisional sample, not yet the fixed B countdown.
-    assert c.read(c.profile["palette"], 2) == 0x7FFF
+    assert c.s("shown") == 0xB0016494
+    assert c.read(c.profile["palette"], 2) == 0x03E0
     c.frame(3503)
     assert c.s("locked") == 1
     assert c.s("shown") == 0xB0016492
@@ -420,7 +416,7 @@ def test_birds_press_once_at_deadline_without_any_held_button(code, target):
     assert c.s("shown") == 0xC0000001
     assert not c.presses
     assert c.main_loop() == 1
-    assert c.read(c.profile["main"] + 0x2C, 2) == 0
+    assert c.read(c.profile["main"] + 0x2C, 2) == 1  # One injected A; next ReadKeys releases it.
     c.frame(20000)
     assert c.s("shown") == 0xC0000000
     assert c.main_loop() == 0
@@ -478,7 +474,7 @@ def test_no_stores_to_rng_pokemon_save_blocks_or_rom(held):
         (0x03007800, 0x03007D00),
         (p["main"] + 0x3F8, p["main"] + 0x438),
         (p["main"], p["main"] + 4),
-        (p["main"] + 0x2E, p["main"] + 0x30),
+        (p["main"] + 0x2C, p["main"] + 0x30),
         (0x06017E00, 0x06018000),
         (p["palette"], p["palette"] + 4),
         (p["palette"] - 0x400, p["palette"] - 0x3FC),
@@ -498,16 +494,17 @@ def test_guest_fits_and_payloads_do_not_exceed_protocol_limit():
     assert all(len(part) <= 1024 for part in payloads(c.plan, c.code))
 
 
-def test_stationary_two_advance_stride_reselects_a_reachable_target():
+def test_first_visible_candidate_is_retained_even_if_a_later_stride_changes_parity():
     c = Console(criteria=Criteria(shiny=False), first=20000, last=20005)
     c.frame(3500)
     assert c.s("target") == 20000
-    assert c.s("shown") == 0xA0020000
+    assert c.s("shown") == 0xB0016497
     c.frame(3502)
-    assert c.s("target") == 20001  # Wireless Mewtwo's press index 19998 is even.
-    assert c.s("shown") == 0xB0016496
+    assert c.s("target") == 20000
+    assert c.s("shown") == 0xB0016495
+    assert c.read(c.profile["palette"], 2) == 0x02FF
     assert c.s("locked") == 1
-    c.frame(19998)
+    c.frame(19997)  # A later odd interval restores the original candidate's parity.
     assert c.main_loop() == 1
     assert c.s("status") == 7
 
@@ -727,17 +724,13 @@ def test_retry_never_extends_the_configured_range_when_all_candidates_are_past(c
 
 
 @pytest.mark.parametrize("code", PROFILES)
-@pytest.mark.parametrize("problem", ["lag", "menu", "script", "target", "rng", "expired"])
+@pytest.mark.parametrize("problem", ["lag", "menu", "rng", "expired"])
 def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_success(code, problem):
     c = Console(code, criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3501)
-    deadline, reason = 19997, {"lag": 10, "menu": 4, "script": 3, "target": 5, "rng": 11, "expired": 12}[problem]
+    deadline, reason = 19997, {"lag": 10, "menu": 4, "rng": 11, "expired": 12}[problem]
     if problem == "menu":
         c.set_overworld(False)
-    if problem == "script":
-        c.write(c.profile["context"] + 1, 0, 1)
-    if problem == "target":
-        c.write(c.profile["objects"] + 36 + 5, 0, 1)
     c.frame(deadline, lag=problem == "lag")
     if problem == "rng":
         c.write(c.profile["rng"], c.lcg.step(c.read(c.profile["rng"])))

@@ -81,6 +81,7 @@ def installation(path, game, build, target):
         raise ValueError("安装报告的卡带构建与本次核对不一致")
     from .model import Criteria
     from .native import ACK
+    from .encounters import UNOWN_CHAMBERS
 
     if data.get("installer_ack") != ACK:
         raise ValueError("安装报告没有本版掌机端的完整传输回执")
@@ -89,6 +90,10 @@ def installation(path, game, build, target):
         first, last = data["range"]["first"], data["range"]["last"]
         if not (type(first) is int and type(last) is int and 0 <= first <= last <= 9999999):
             raise ValueError()
+        method = data.get("method", 1)
+        chamber = data.get("chamber") or "monean"
+        if type(method) is not int or method not in (1, 2, 4) or chamber not in UNOWN_CHAMBERS:
+            raise ValueError()
     except (KeyError, TypeError, ValueError):
         raise ValueError("安装报告的筛选条件或搜索范围无效") from None
     return {
@@ -96,4 +101,6 @@ def installation(path, game, build, target):
         "sha256": digest(text.encode("utf-8")),
         "criteria": data["criteria"],
         "range": data["range"],
+        "method": method,
+        "chamber": chamber,
     }

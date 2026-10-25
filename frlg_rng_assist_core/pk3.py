@@ -102,6 +102,10 @@ def choose_record(records, species, slot=0):
         if not selected:
             raise ValueError("所选队伍位置为空")
         return selected[0]
+    if not records:
+        raise ValueError("队伍为空；请把目标放入队伍并在游戏里保存")
+    if not species:
+        return max(records, key=lambda mon: mon["slot"])
     matching = [mon for mon in records if mon["species"] == species]
     if not matching:
         raise ValueError("队伍里没有所选目标；请把捕获的目标放入队伍并在游戏里保存")

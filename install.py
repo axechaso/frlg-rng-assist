@@ -5,6 +5,7 @@ import json
 
 from frlg_rng_assist_core.arguments import console_arguments, ivs, nature
 from frlg_rng_assist_core.display import card
+from frlg_rng_assist_core.encounters import ENCOUNTERS, UNOWN_CHAMBERS, offset_flag
 from frlg_rng_assist_core.launcher import HostFailure, run_gift
 from frlg_rng_assist_core.native import console_arguments as host_arguments
 from frlg_rng_assist_core.model import Criteria
@@ -15,10 +16,16 @@ from frlg_rng_assist_core.records import capture_path, report_path, save_report
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     console_arguments(parser)
-    parser.add_argument("--enable-auto-a", action="store_true", help="安装并启用到点自动 A")
+    parser.add_argument("--enable-auto-a", action="store_true", help="安装并启用到点按键；凤王为 ↑，其他目标为 A")
     parser.add_argument("--start", type=int, default=10000, help="从标题实际初始 seed 起算的 advance 下限")
     parser.add_argument("--end", type=int, default=200000, help="advance 上限，含端点，最大 9999999")
-    parser.add_argument("--offset", type=int, help="额外提前量 0..253 advances；留空使用三鸟 3 / 超梦 2")
+    offsets = parser.add_mutually_exclusive_group()
+    offsets.add_argument("--offset", type=int, help="额外提前量 0..65533 advances；默认使用目标预设")
+    for target in ENCOUNTERS:
+        offsets.add_argument(offset_flag(target), dest="offset", type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--method", type=int, choices=(1, 2, 4), default=1,
+                        help="定点 1/2/4；野生 H1/H2/H4，通常用 1")
+    parser.add_argument("--chamber", choices=UNOWN_CHAMBERS, default="monean", help="未知图腾的房间")
     parser.add_argument("--nature", type=nature, help="性格：中文、英文或 0..24；留空不限")
     parser.add_argument("--iv-min", type=ivs, default=(0, 0, 0, 0, 0, 0))
     parser.add_argument("--iv-max", type=ivs, default=(31, 31, 31, 31, 31, 31))
@@ -33,10 +40,11 @@ def main(argv=None):
     try:
         criteria = Criteria(not args.allow_normal, args.nature, None, args.iv_min, args.iv_max)
         plan = install_plan(
-            args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria, offset=args.offset
+            args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria,
+            offset=args.offset, method=args.method, chamber=args.chamber,
         )
         if not args.preview and not args.enable_auto_a:
-            raise ValueError("请勾选「安装并启用自动 A」；只检查配置可选择「仅预览」。")
+            raise ValueError("请勾选「安装并启用到点按键」；只检查配置可选择「仅预览」。")
         output = report_path(args.output, "install")
         gift = capture_path(output, ".pokegift")
         plan["gift"] = write_gift(plan, gift)
@@ -66,20 +74,22 @@ def main(argv=None):
             print(f"预览已生成：{plan['gift']['path']}。本次没有连接掌机。")
         else:
             print("安装回执已确认。退出 Mystery Gift，返回标题，再选择继续游戏。")
-            print("回到地图后：上排为当前 seed；下排 A=搜索 / 初始确认，B=固定目标剩余 advances。按住 L 查看初始 seed。")
+            print("回到地图后：上排为当前 seed；下排 A=搜索，B=固定目标剩余 advances。按住 L 查看初始 seed。")
             print("同时按住 L+R 查看队尾：上排白色 8 位十六进制 PID，下排队伍位置 1..6；松开恢复，查看不暂停计时或自动 A。")
             print("L/R 打开帮助时，先将 OPTIONS → BUTTON MODE 设为 L/R 并保存；本插件不单独识别 ZL/ZR。")
-            print("倒计时：与自动 A 时机奇偶不一致为黄色，一致且当前可触发为绿色；不代表站位已就绪。")
-            print(f"额外 Offset={plan['offset_advances']} advances；合计在目标生成前 {plan['auto_a_offset_advances']} advances 排定 A。")
-            if args.target == "mewtwo":
-                print("超梦：提前对话，等叫声和文字结束，停在按键等待；之后不要再手动按 A/B。")
-            else:
-                print("三鸟：提前走到想按 A 的位置，松开所有按键等倒计时；到点自动按一次 A，无需按住 B。")
-                print("站位由你负责；插件不检测相邻、朝向、移动、目标对象或脚本状态。")
-            print("C0000001=等待注入，C0000000=已注入 A；是否实际开战仍须观察。")
+            button = "↑" if plan["trigger_button"] == "UP" else "A"
+            print("倒计时：与按键时机奇偶不一致为黄色，一致且当前可触发为绿色；不代表站位已就绪。")
+            print(f"额外 Offset={plan['offset_advances']} advances；合计在目标生成前 {plan['auto_a_offset_advances']} advances 排定 {button}。")
+            print(plan["decision_point"])
+            print(f"自行停在决定点，插件到点按一次 {button}；不检测站位、朝向、对象、脚本等待或 B 键。")
+            if plan["model"] != "static":
+                print(f"野生 H{plan['method']}：范围按遭遇槽位抽取前计数，包含性格 / PID 重抽。Offset 首次需校准。")
+            elif plan["offset_source"] == "reference_uncalibrated":
+                print("此 Offset 是参考预设，尚未在这个决定点做实机校准；先允许非闪光测试实际 PID。")
+            print(f"C0000001=等待注入，C0000000=已注入 {button}；是否实际触发仍须观察。")
             print("颜色变化不会提前丢弃原目标；原目标保留到指定时机。")
             print("错过或本次按键失败时，红色 D 原因码在地图保留约 1 秒，再自动续搜；在电视里错过则返回地图后提示。")
-            print("续搜保留初始 seed 和筛选条件，不补按旧目标。发送一次 A 后结束；E=范围耗尽，F=计数失效，也会结束。")
+            print("续搜保留初始 seed 和筛选条件，不补按旧目标。发送一次按键后结束；E=范围耗尽，F=计数失效，也会结束。")
             print("捕获后把目标留在队伍中，游戏内保存，再运行「核对捕获结果」。")
             print("软重启或关闭游戏会清除注入；下一次尝试需重新安装。")
         print(f"报告：{output}")
@@ -87,6 +97,7 @@ def main(argv=None):
             "实机 RNG 搜索",
             [
                 f"目标\t{plan['target_name']}",
+                f"触发按键\t{plan['trigger_button']}",
                 f"状态\t{'仅预览' if args.preview else '安装回执已确认'}",
                 f"范围\t{args.start}..{args.end} advances（从标题初始 seed 起算）",
                 f"额外 Offset\t{plan['offset_advances']} advances（总提前量 {plan['auto_a_offset_advances']}）",

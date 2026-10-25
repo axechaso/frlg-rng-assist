@@ -21,6 +21,12 @@ the RFU draw on each main-loop pass, using pret/pokefirered's `src/script.c`,
 the legendary encounter scripts. `tests/encounter_timing.py` is a source-based
 phase model, not bundled ROM code or a full game emulator.
 
+Version 0.4.0's wild encounter model and Tanoby letter tables follow the random-call
+order documented by pret/pokefirered's src/wild_encounter.c and src/pokemon.c.
+The supplied encounter-delay reference values are editable presets, not measured
+timing certifications. Ho-Oh's direction input follows NavelRock_Summit/map.json,
+its coordinate-event script, and field_control_avatar.c's held-key handling.
+
 This plugin uses documented API 1.11 and the public catalog launcher; it does not
 bundle the PokeLDN host or any ROM, save, prod.keys, or private signing key.
 

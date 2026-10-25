@@ -1,12 +1,13 @@
 """Registration only. Importing this file never runs a launcher or touches the board."""
 
 from pokeldn.plugins import Field, Tool
+from frlg_rng_assist_core.encounters import ENCOUNTERS, UNOWN_CHAMBERS, default_offset, offset_flag
 
 
 def register(api):
     from frlg_rng_assist_core.native import PROFILES
 
-    target_choices = (("mewtwo", "超梦"), ("articuno", "急冻鸟"), ("zapdos", "闪电鸟"), ("moltres", "火焰鸟"))
+    target_choices = tuple((key, encounter.name) for key, encounter in ENCOUNTERS.items())
     common = (
         Field(
             "--game",
@@ -15,7 +16,8 @@ def register(api):
             default="firered",
             choices=(("firered", "火红"), ("leafgreen", "叶绿")),
         ),
-        Field("--target", "目标", "choice", default="mewtwo", choices=target_choices),
+        Field("--target", "目标", "choice", default="mewtwo", choices=target_choices,
+              choice_help=tuple((key, encounter.decision) for key, encounter in ENCOUNTERS.items())),
         Field(
             "--build",
             "卡带语言 / 构建",
@@ -32,17 +34,17 @@ def register(api):
         "frlg",
         Tool(
             "frlg-rng-assist-install",
-            "RNG：搜索与到点自动 A",
+            "RNG：搜索与到点按键",
             "install.py",
-            "注入范围和筛选条件；从标题实际初始 seed 计算 advances，掌机显示 seed / 倒计时，到点按一次 A。",
+            "注入范围和筛选条件；从实际初始 seed 计算 advances，到点触发一次：凤王按 ↑，其他目标按 A。",
             (
                 "先在目标附近保存，重新启动游戏，清除其他 boosts。查看 seed / PID 前把 OPTIONS → BUTTON MODE 设为 L/R 并保存。",
                 "掌机：Mystery Gift → Wonder Cards → Friend，选择 POKELDN，等待日志确认安装回执。",
-                "退出到标题，继续游戏。上排当前 seed；下排 A 搜索 / 确认，B 为固定目标倒计时。按住 L 查看初始 seed 和绝对 advances。",
+                "退出到标题，继续游戏。上排当前 seed；下排 A 搜索，B 为固定目标倒计时。按住 L 查看初始 seed 和绝对 advances。",
                 "同时按住 L+R：上排白色显示队尾宝可梦的 8 位十六进制 PID，下排显示队尾位置 1..6；松开恢复。查看不暂停计时或自动 A。",
-                "三鸟：提前走到想按 A 的位置后松开所有按键，到点自动按一次 A。插件不检测站位、朝向、移动或 B 键。",
-                "超梦：提前对话，叫声和文字结束后停在按键等待，不再手动按 A/B。绿色表示奇偶一致且当前可触发，不表示已站到目标前。",
-                "倒计时与自动 A 时机奇偶不一致显示黄色，一致且可触发显示绿色；不会因颜色变化提前换目标。错过后红色 D 原因码保留约 1 秒，再在原范围内续搜；电视中错过会等回到地图后提示。C0000000 表示已发 A，E 范围耗尽 / F 计数失效。",
+                "所有目标流程一致：你自行到决定点，插件负责搜索、倒计时和一次按键；凤王按 ↑，其他目标按 A。不检测站位、朝向、对象或 B 键。",
+                "超梦停在对话的按键等待；三鸟停在面前；甜甜香气停在队伍菜单该选项；钓鱼自行完成咬钩，停在最终确认。参考 Offset 按目标预填，野生首次需校准。",
+                "倒计时与按键时机奇偶不一致显示黄色，一致且可触发显示绿色；不因颜色变化提前换目标。错过后红色 D 保留约 1 秒，再在原范围续搜。C0000000 表示已发按键，E 范围耗尽 / F 计数失效。",
                 "捕获后把目标留在队伍中，游戏内保存，再用下方工具核对。软重启或关闭游戏会清除注入，需重新安装。",
             ),
             fields=(
@@ -59,14 +61,21 @@ def register(api):
                     "结束 advance（含）",
                     "number",
                     default="200000",
-                    help="最大 9999999；范围针对生成 PID 前的 RNG 状态。",
+                    help="最大 9999999；定点为首次 PID 抽取前，野生为遭遇槽位抽取前。",
                 ),
-                Field(
-                    "--offset",
+                *(Field(
+                    offset_flag(key),
                     "额外 Offset（advances）",
                     "number",
-                    help="0..253；在基础按 A 时机上额外提前。留空：三鸟 3、超梦 2。本次急冻鸟填 3；范围仍对应最终生成目标。",
-                ),
+                    default=str(default_offset(key)),
+                    when=("--target", key),
+                    bounds=(0, 65533),
+                    help="按目标预填并分别保存；0..65533，在基础时机上额外提前。参考预设仍可校准；野生首次需校准。",
+                ) for key in ENCOUNTERS),
+                Field("--method", "生成方式", "choice", default="1",
+                      choices=(("1", "1 / H1（默认）"), ("2", "2 / H2"), ("4", "4 / H4"))),
+                Field("--chamber", "未知图腾房间", "choice", default="monean",
+                      choices=tuple((key, key.title()) for key in UNOWN_CHAMBERS), when=("--target", "unown")),
                 Field("--nature", "性格（留空不限）", help="中文名、英文名或 0..24。首测留空。"),
                 Field(
                     "--iv-min",
@@ -80,10 +89,10 @@ def register(api):
                 Field("--allow-normal", "允许非闪光（首轮按 A 测试可打开）", "switch", default=False),
                 Field(
                     "--enable-auto-a",
-                    "安装并启用自动 A",
+                    "安装并启用到点按键",
                     "switch",
                     default=True,
-                    help="三鸟到点自动按一次 A，无需按住 B；站位由你负责。首测打开允许非闪光，性格 / IV 不限。仅预览不连接掌机。",
+                    help="自行停在决定点，无需按住 B；凤王发 ↑，其余发 A。首测允许非闪光，性格 / IV 不限。仅预览不连接掌机。",
                 ),
                 Field("--preview", "仅预览配置（不连接掌机）", "switch", default=False),
             ),
@@ -97,14 +106,14 @@ def register(api):
             "verify.py",
             "读取游戏最后保存的队伍，核对闪光、PID、性格、六项 IV 和生成模型，并保存报告。",
             (
-                "把刚捕获的目标放进队伍，先在游戏里保存。自动选择要求队伍里只有一只同种目标。",
+                "把刚捕获的目标放进队伍，先在游戏里保存。指定种类时自动选择唯一同种目标；野生 / 自定目标默认选队尾。",
                 "掌机：Mystery Gift → Wonder Cards → Friend，选择 POKELDN，等待读取完毕。",
                 "已有 .pk3/.ek3 或队伍采集文件时可在高级选项中导入；导入模式不连接掌机。",
             ),
             fields=(
                 *common,
                 Field(
-                    "--slot", "队伍位置", "number", default="0", help="0 自动选择唯一目标；1..6 指定位置。"
+                    "--slot", "队伍位置", "number", default="0", help="0 自动选择（野生 / 自定为队尾）；1..6 指定位置。"
                 ),
                 Field("--installation", "关联安装报告（可选）", "file", exts=("json",), hidden=True),
                 Field(
@@ -139,7 +148,7 @@ def register(api):
             "frlg-rng-assist-search",
             "RNG：离线目标搜索",
             "search.py",
-            "用公开 RNG API 按闪光、性格、PID 和 IV 范围搜索 Method 1/2/4 候选。",
+            "按闪光、性格、PID 和 IV 搜索定点 Method 1/2/4、野生 H1/H2/H4 或未知图腾。",
             (
                 "无需操作掌机。输入待分析的 seed 与游戏实际 TID/SID。",
                 "结果单位为 RNG advances。Mystery Gift 的 seed 无法带回地图使用；本工具不设置自动 A。",
@@ -148,12 +157,19 @@ def register(api):
                 Field("--seed", "起始 seed（十六进制）", required=True),
                 Field("--tid", "游戏 TID", "number", required=True),
                 Field("--sid", "游戏 SID", "number", required=True),
+                Field("--model", "遭遇模型", "choice", default="static",
+                      choices=(("static", "定点 / 礼物"), ("wild", "野生"), ("unown", "未知图腾"))),
+                Field("--area", "野生槽位表", "choice", default="land", when=("--model", "wild"),
+                      choices=(("land", "草地 / 洞窟 / 碎岩"), ("surf", "水面"),
+                               ("old", "破旧钓竿"), ("good", "好钓竿"), ("super", "厉害钓竿"))),
+                Field("--chamber", "未知图腾房间", "choice", default="monean", when=("--model", "unown"),
+                      choices=tuple((key, key.title()) for key in UNOWN_CHAMBERS)),
                 Field(
                     "--method",
                     "生成模型",
                     "choice",
                     default="1",
-                    choices=(("1", "Method 1"), ("2", "Method 2"), ("4", "Method 4")),
+                    choices=(("1", "1 / H1"), ("2", "2 / H2"), ("4", "4 / H4")),
                 ),
                 Field("--start", "起始 advance", "number", default="0"),
                 Field("--advances", "候选数量", "number", default="100000"),

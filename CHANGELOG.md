@@ -1,5 +1,13 @@
 # Changes
 
+## 0.4.0 — 2026-10-25
+
+- Expand presets to stationary encounters, gifts, fossils, Game Corner, roamer initialization, Sweet Scent, all three fishing rods, Rock Smash and Tanoby Unown. Keep the player's workflow: reach the decision point, search and count down, then inject one input. Ho-Oh uses UP, including heldKeys for movement; other targets use A. No position, object, script-wait or held-B gate remains.
+- Prefill and remember each target's extra Offset separately in the actual host form. Retain Mewtwo 2 / birds 3; populate supplied references for other encounters, and mark unmeasured defaults as reference / uncalibrated. Accept 0..65533 extra advances, including Deoxys 501 / Lugia 277 / Ho-Oh 379. A constant-time LCG jump replaces the offset-length catch-up loop.
+- Add FRLG Method-H nature/PID rejection, H1/H2/H4 IV variants, and Tanoby's slot-specific letter rejection with reversed PID halves. Resume long rejection chains across interrupts instead of truncating candidates. Offline search and captured-result recovery use the same pre-slot boundary; generic wild capture defaults to the party tail.
+- Enable the overlay and one-shot callback2 input in menus for Sweet Scent / fishing / starter profiles, after initial map activation. Restore the original callback and retain expiry / RNG validation. Map-only encounters still hide their overlay in menus. Do not automate fishing rounds or menu navigation.
+- Lock a candidate as soon as it is displayed as B; parity changes affect colour and do not silently replace it. Keep visible miss notices, original-range retries and terminal one-shot behavior. The guest fits the existing 2200-byte reservation. Software and frozen-host checks do not certify any new encounter's physical timing.
+
 ## 0.3.9 — 2026-10-25
 
 - Add a visible extra Offset field and CLI option, in RNG advances. Blank uses birds 3 / Mewtwo 2; 0 restores the old press timing, and 0..253 is accepted. Add it to the existing baseline of birds 2 / Mewtwo 1. Keep generation targets unchanged; pack the resulting deadline into the guest, use it for countdown / parity, and record all three values in installation reports. Test explicit offsets against the compiled guest and reject invalid values before transfer.

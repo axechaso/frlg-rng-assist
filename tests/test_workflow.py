@@ -34,7 +34,9 @@ def test_preview_exports_a_real_gift_without_starting_a_host(tmp_path, monkeypat
 @pytest.mark.parametrize("target,offset,base,total", [
     ("articuno", None, 2, 5), ("mewtwo", None, 1, 3),
     ("articuno", 0, 2, 2), ("articuno", 3, 2, 5),
-    ("mewtwo", 3, 1, 4), ("moltres", 253, 2, 255),
+    ("mewtwo", 3, 1, 4), ("moltres", 65533, 2, 65535),
+    ("deoxys", None, 2, 503), ("lugia", None, 2, 279),
+    ("sweet-land", None, 1, 1), ("fish-super", 1000, 1, 1001),
 ])
 def test_preview_records_effective_offset_and_preserves_range(tmp_path, target, offset, base, total, capsys):
     output = tmp_path / "offset.json"
@@ -51,7 +53,7 @@ def test_preview_records_effective_offset_and_preserves_range(tmp_path, target, 
     assert json.loads(capsys.readouterr().out)["auto_a_offset_advances"] == total
 
 
-@pytest.mark.parametrize("offset", [-1, 254, True, "3"])
+@pytest.mark.parametrize("offset", [-1, 65534, True, "3"])
 def test_invalid_offset_is_rejected_before_building_a_gift(offset):
     with pytest.raises(ValueError, match="Offset"):
         install_plan("firered", "auto", "articuno", offset=offset)

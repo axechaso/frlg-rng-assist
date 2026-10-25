@@ -5,6 +5,7 @@ import json
 
 from frlg_rng_assist_core.arguments import hex_word, ivs, nature, output_arguments
 from frlg_rng_assist_core.display import card, progress
+from frlg_rng_assist_core.encounters import UNOWN_CHAMBERS
 from frlg_rng_assist_core.model import Criteria, search
 from frlg_rng_assist_core.records import report_path, save_report
 
@@ -16,6 +17,9 @@ def build_parser():
     parser.add_argument("--tid", type=int, required=True)
     parser.add_argument("--sid", type=int, required=True)
     parser.add_argument("--method", type=int, choices=(1, 2, 4), default=1)
+    parser.add_argument("--model", choices=("static", "wild", "unown"), default="static")
+    parser.add_argument("--area", choices=("land", "surf", "old", "good", "super"), default="land")
+    parser.add_argument("--chamber", choices=UNOWN_CHAMBERS, default="monean")
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--advances", type=int, default=100000)
     parser.add_argument("--max-results", type=int, default=10)
@@ -37,6 +41,9 @@ def main(argv=None):
             args.tid,
             args.sid,
             method=args.method,
+            model=args.model,
+            area=args.area,
+            chamber=args.chamber,
             start=args.start,
             advances=args.advances,
             max_results=args.max_results,

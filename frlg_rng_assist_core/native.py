@@ -1,6 +1,6 @@
 """Build the standalone guest using the public RNG helpers and versioned gift format."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -8,29 +8,9 @@ import struct
 
 from .backend import backend, bounded
 from .model import Criteria
+from .encounters import BASE_PRESS_OFFSETS, ENCOUNTERS, UNOWN_CHAMBERS, default_offset
 
 
-@dataclass(frozen=True)
-class Encounter:
-    name: str
-    species: int
-    profile: str
-    graphics: int
-    offset: int
-
-
-# This plugin requires the wireless RFU draw before callback1 (press_shim).
-# Native-script completion yields even when successful: Mewtwo generates on
-# pass 2, birds on pass 3 after lock. From the post-VBlank sample this costs
-# RFU + VBlank + RFU = 3, or RFU + VBlank + RFU + VBlank + RFU = 5.
-# The upstream offsets 1 / 2 do not cover this wireless script path.
-ENCOUNTERS = {
-    "mewtwo": Encounter("超梦", 150, "mewtwo", 139, 3),
-    "articuno": Encounter("急冻鸟", 144, "birds", 138, 5),
-    "zapdos": Encounter("闪电鸟", 145, "birds", 136, 5),
-    "moltres": Encounter("火焰鸟", 146, "birds", 137, 5),
-}
-BASE_PRESS_OFFSETS = {"mewtwo": 1, "birds": 2}
 GAMES = {"firered": "火红", "leafgreen": "叶绿"}
 GAME_ORIGINS = {"firered": 4, "leafgreen": 5}
 ACK = 0x524E4703
@@ -53,6 +33,7 @@ PROFILES = {
         "palette": 0x020379D6,
         "party": 0x02024280,
         "party_count": 0x02024025,
+        "battle_cb2": 0x0801489D,
         "table": 0x030027E0,
     },
     "BPRF": {
@@ -70,6 +51,7 @@ PROFILES = {
         "palette": 0x020379D6,
         "party": 0x02024280,
         "party_count": 0x02024025,
+        "battle_cb2": 0x08014889,
         "table": 0x03002730,
     },
 }
@@ -82,20 +64,17 @@ CONFIG_WORDS = (
     "cb1",
     "cb2",
     "original",
-    "context",
-    "wait",
-    "objects",
-    "selected",
     "seed_getter",
     "palette",
     "party",
     "party_count",
+    "battle_cb2",
 )
 
 
 def validate_context(game, build, target):
     if game not in GAMES or target not in ENCOUNTERS:
-        raise ValueError("仅支持火红/叶绿的超梦、急冻鸟、闪电鸟和火焰鸟")
+        raise ValueError("请选择有效的火红/叶绿游戏和遭遇目标")
     if build != "auto":
         if build not in PROFILES:
             raise ValueError("本版仅支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF")
@@ -103,7 +82,8 @@ def validate_context(game, build, target):
             raise ValueError("游戏与卡带代码不匹配")
 
 
-def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None):
+def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None,
+                 method=1, chamber="monean"):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -113,7 +93,11 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         raise ValueError("实机搜索仅支持闪光、性格及 IV 条件；精确 PID 请使用离线搜索")
     encounter = ENCOUNTERS[target]
     base_offset = BASE_PRESS_OFFSETS[encounter.profile]
-    extra_offset = encounter.offset - base_offset if offset is None else bounded(offset, 0, 253, "Offset")
+    extra_offset = default_offset(target) if offset is None else bounded(offset, 0, 65533, "Offset")
+    if type(method) is not int or method not in (1, 2, 4):
+        raise ValueError("仅支持 Method 1 / 2 / 4；野生对应 H1 / H2 / H4")
+    if chamber not in UNOWN_CHAMBERS:
+        raise ValueError("未知图腾房间无效")
     return {
         "kind": "native_install",
         "status": "prepared",
@@ -128,10 +112,16 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
             "inclusive": True,
             "unit": "rng_advances",
             "origin": "title_reseed_initial_seed",
-            "boundary": "before_first_pid_draw",
+            "boundary": "before_first_pid_draw" if encounter.model == "static" else "before_encounter_slot_draw",
         },
         "criteria": asdict(criteria),
-        "method": 1,
+        "method": method,
+        "model": encounter.model,
+        "chamber": chamber if encounter.model == "unown" else None,
+        "offset_source": encounter.delay_source if extra_offset == default_offset(target) else "manual",
+        "decision_point": encounter.decision,
+        "trigger_button": "UP" if encounter.button == 64 else "A",
+        "trigger_key_mask": encounter.button,
         "offset_advances": extra_offset,
         "auto_a_base_offset_advances": base_offset,
         "auto_a_offset_advances": base_offset + extra_offset,
@@ -156,20 +146,29 @@ def resident(plan, code):
     first = plan["range"]["first"]
     increment = lcg.advance(0, first)
     multiplier = (lcg.advance(1, first) - increment) & 0xFFFFFFFF
+    advance = plan["auto_a_offset_advances"] + 1
+    offset_c = lcg.advance(0, advance)
+    offset_a = (lcg.advance(1, advance) - offset_c) & 0xFFFFFFFF
     order = (0, 1, 2, 5, 3, 4)  # Random's IV fields: HP, ATK, DEF, SPE, SPA, SPD.
     settings = struct.pack(
-        "<18I16B",
+        "<17IH30B",
         *(profile[name] for name in CONFIG_WORDS),
         first,
         plan["range"]["last"],
         multiplier,
         increment,
-        encounter.graphics,
+        offset_a,
+        offset_c,
         plan["auto_a_offset_advances"],
+        {"static": 0, "wild": 1, "unown": 2}[encounter.model],
+        plan["method"],
         int(criteria["shiny"]),
         255 if criteria["nature"] is None else criteria["nature"],
+        int(encounter.menus),
+        encounter.button,
         *(criteria["iv_min"][i] for i in order),
         *(criteria["iv_max"][i] for i in order),
+        *UNOWN_CHAMBERS[plan["chamber"] or "monean"],
     )
     at = manifest["symbols"]["config"] - manifest["base"]
     blob[at : at + len(settings)] = settings

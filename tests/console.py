@@ -26,6 +26,7 @@ SB2 = 0x02024584
 STATES = (
     "initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status", "reason", "locked",
     "notice",
+    "call_slot", "call_original", "call_context", "work_cursor", "work_nature", "work_active",
 )
 
 
@@ -41,6 +42,8 @@ class Console:
         last=200000,
         install=True,
         offset=None,
+        method=1,
+        chamber="monean",
     ):
         self.code, self.profile, self.manifest = code, PROFILES[code], guest()
         self.plan = install_plan(
@@ -51,6 +54,8 @@ class Console:
             last=last,
             criteria=criteria,
             offset=offset,
+            method=method,
+            chamber=chamber,
         )
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
         for base, size in (
@@ -74,12 +79,18 @@ class Console:
         self.write(self.profile["table"], self.profile["original"])
         self.uc.mem_write(self.profile["original"] & ~1, bytes.fromhex("7047"))
         self.uc.mem_write(self.profile["cb1"] & ~1, bytes.fromhex("7047"))
+        self.uc.mem_write(self.profile["cb2"] & ~1, bytes.fromhex("7047"))
+        self.uc.mem_write(0x0807C418, bytes.fromhex("7047"))
+        self.uc.mem_write(self.profile["battle_cb2"] & ~1, bytes.fromhex("7047"))
         self.write(0x04000208, 1, 2)
         self.write(0x04000000, 0x1040, 2)
         self.lcg, _ = backend()
         self.write(self.profile["rng"], self.lcg.advance(initial, index))
         self.seed = initial
         self.presses = []
+        self.inputs = []
+        self.input_keys = []
+        self.input_addresses = (self.profile["cb1"] & ~1, 0x0807C418)
         self.phases = []
         self.writes = []
         self.instructions = 0
@@ -98,14 +109,19 @@ class Console:
         if address == self.profile["original"] & ~1:
             self.write(self.profile["rng"], self.lcg.step(self.read(self.profile["rng"])))
             self.phases.append(("vblank", self.read(self.profile["rng"])))
-        if address == self.profile["cb1"] & ~1 and self.read(self.profile["main"] + 0x2E, 2) & 1:
+        if (address in self.input_addresses
+                and self.read(self.profile["main"] + 0x2E, 2) & self.plan["trigger_key_mask"]):
+            self.inputs.append((address, self.read(self.profile["rng"])))
+            self.input_keys.append((self.read(self.profile["main"] + 0x2C, 2),
+                                    self.read(self.profile["main"] + 0x2E, 2)))
             self.phases.append(("callback1_a", self.read(self.profile["rng"])))
             # Forecast script completion from explicit per-pass yields, not a
             # configured number of immediate generation draws. main_loop has
             # already applied the first RFU draw; the trace starts before it.
-            post_vblank = self.lcg.advance(self.read(self.profile["rng"]), 0xFFFFFFFF)
-            seed, _ = generation_trace(post_vblank, self.plan["target"], self.lcg)
-            self.presses.append((seed, predict(seed, 12345, 2791)))
+            if self.plan["target"] in ("mewtwo", "articuno", "zapdos", "moltres"):
+                post_vblank = self.lcg.advance(self.read(self.profile["rng"]), 0xFFFFFFFF)
+                seed, _ = generation_trace(post_vblank, self.plan["target"], self.lcg)
+                self.presses.append((seed, predict(seed, 12345, 2791)))
 
     def _write(self, uc, access, address, size, value, user):
         if self.record:
@@ -115,6 +131,8 @@ class Console:
         return int.from_bytes(self.uc.mem_read(at, size), "little")
 
     def write(self, at, value, size=4):
+        if at == self.profile["main"] + 0x2C and size == 2:
+            self.physical_keys = value
         self.uc.mem_write(at, int(value).to_bytes(size, "little"))
 
     def s(self, name, value=None):
@@ -168,13 +186,19 @@ class Console:
         self.call(self.read(self.profile["table"]))
 
     def main_loop(self, *, rfu_calls=1):
+        self.write(self.profile["main"] + 0x2C, self.physical_keys, 2)
         self.write(self.profile["main"] + 0x2E, 0, 2)  # ReadKeys
         # RfuMain1 passes Random() to rfu_LMAN_manager_entity before CallCallbacks,
         # including after the RFU manager shuts down. This was absent in <=0.3.6.
         for _ in range(rfu_calls):
             self.write(self.profile["rng"], self.lcg.step(self.read(self.profile["rng"])))
         self.phases.append(("link", self.read(self.profile["rng"])))
-        self.call(self.read(self.profile["main"]))
+        cb1 = self.read(self.profile["main"])
+        if cb1:
+            self.call(cb1)
+        cb2 = self.read(self.profile["main"] + 4)
+        if cb2:
+            self.call(cb2)
         return self.read(self.profile["main"] + 0x2E, 2)
 
     def resume_after_notice(self):

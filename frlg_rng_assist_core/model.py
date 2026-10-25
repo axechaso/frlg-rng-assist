@@ -42,6 +42,9 @@ def search(
     sid,
     *,
     method=1,
+    model="static",
+    area="land",
+    chamber="monean",
     start=0,
     advances=100000,
     max_results=10,
@@ -59,6 +62,13 @@ def search(
         raise ValueError("搜索范围不能跨过 32 位索引的末尾")
     if type(method) is not int or method not in (1, 2, 4):
         raise ValueError("仅支持 Method 1、2、4")
+    from .encounters import UNOWN_CHAMBERS
+    from .wild import predict_wild
+
+    if model not in ("static", "wild", "unown") or chamber not in UNOWN_CHAMBERS:
+        raise ValueError("遭遇模型或未知图腾房间无效")
+    if area not in ("land", "surf", "old", "good", "super"):
+        raise ValueError("野生槽位表无效")
     criteria = criteria or Criteria()
     lcg, _ = backend()
     state, targets, tested = lcg.advance(seed, start), [], 0
@@ -67,7 +77,8 @@ def search(
         if cancel and cancel():
             reason = "cancelled"
             break
-        mon = predict(state, tid, sid, method)
+        mon = (predict(state, tid, sid, method) if model == "static" else
+               predict_wild(state, tid, sid, method, model=model, area=area, chamber=chamber))
         tested += 1
         if criteria.matches(mon):
             targets.append(
@@ -80,6 +91,8 @@ def search(
                     "nature_zh": mon["nature_zh"],
                     "ivs": mon["ivs"],
                     "shiny": mon["shiny"],
+                    **({key: mon[key] for key in ("pid_seed", "pid_offset", "rerolls", "encounter_slot")}
+                       if model != "static" else {}),
                 }
             )
             if len(targets) >= max_results:
@@ -93,7 +106,10 @@ def search(
     return {
         "kind": "offline_search",
         "seed": seed,
-        "seed_boundary": "before_first_pid_draw",
+        "seed_boundary": "before_first_pid_draw" if model == "static" else "before_encounter_slot_draw",
+        "model": model,
+        "area": area if model == "wild" else None,
+        "chamber": chamber if model == "unown" else None,
         "tid": tid,
         "sid": sid,
         "method": method,

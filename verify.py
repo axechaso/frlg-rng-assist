@@ -105,6 +105,8 @@ def main(argv=None):
             pid=criteria.pid,
             initial_seed=args.initial_seed,
             search_range=receipt["range"] if receipt else None,
+            method=receipt["method"] if receipt else 1,
+            chamber=receipt["chamber"] if receipt else "monean",
         )
         report.update(
             source=str(source), source_sha256=digest(raw), source_kind=evidence, installation=receipt

@@ -1,6 +1,24 @@
-# 0.3.9 validation record
+# 0.4.0 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
+
+## 0.4.0 scope and checks
+
+The current workflow has no player/object/script-wait gate. The player chooses the final decision point. All targets receive one A except Ho-Oh, which receives UP in both heldKeys and newKeys. Normal ReadKeys replaces these on the next loop. The synthetic driver now models that replacement; compiled checks verify UP with no A bit on all four builds and no repeated input. This verifies memory/input handling, not movement in a game ROM.
+
+Sweet Scent / fishing / Unown / starter menu profiles draw the overlay and can wrap callback2 after map activation. Compiled checks decode the actual OBJ tile pixels in the synthetic menu and verify restoration, one-shot input, replacement-callback expiry, and battle / missing-callback refusal. Map-only profiles retain menu suppression. The plugin does not recognize which menu option is selected or automate earlier actions.
+
+The wild predictor uses slot + level + nature, then PID rejection until the selected nature matches. Tanoby uses its room-specific slot letter and reversed PID halves instead of the nature roll. The guest resumes candidates after eight rejected pairs per interrupt without imposing a total reroll cap. Independent test arithmetic follows the decompilation's draw order and checks positive / negative IV and nature cases, shiny trainer XOR, all seven Unown tables, H1/H2/H4, reverse recovery and the pre-slot range boundary. Long-chain checks cross the interrupt budget. Substitute callbacks do not execute encounter animations or an actual game ROM.
+
+Every target's conditional Offset field is exercised through the pinned host's real form-to-argument builder: only one applies, it shows its preset, and switching targets preserves separate custom values. Large defaults and the 65533 extra-advance boundary are packed into a 16-bit total; catch-up uses a precomputed LCG jump instead of an offset-length loop. New delay-table values remain uncalibrated references. No claim is made that the supplied video-frame counts equal measured wireless RNG advances.
+
+Checks on the current sources: **821 pytest cases passed in 96.45 s**, Ruff passed, and GCC 15.2.1 reproduced the committed guest with build_guest.py --check. The image is **2200 / 2200 bytes** at the unchanged EWRAM reservation; every transfer stays within the 1024-byte protocol cap. Decimal-renderer carry tests cover indices through 9999999. These checks do not certify any newly listed encounter's physical timing.
+
+The 0.4.0 package was installed into isolated data with the official frozen PokeLDN v0.39.1 Windows app, without local Python module fallback. Its reader verified 31 members, guest / source SHA-256, the 2200-byte layout and the package API; the host reported the plugin loaded at API 1.11. The installed copy passed the actual catalog argument checks and exported real gifts for FireRed Mewtwo / Deoxys / Super Rod and LeafGreen Articuno / Sweet Scent. All three frozen processes exited 0 with empty stderr. Evidence is retained in ignored dist/packed-040-*.log and the host export folder. These are offline package / host checks, not radio, native GUI or physical-console execution.
+
+Earlier observations below are version-specific history; the 0.4.0 ungated workflow and prefilled Offset fields supersede their older UI / readiness descriptions.
+
+## Earlier validation history
 
 ## Wireless generation timing (0.3.9)
 

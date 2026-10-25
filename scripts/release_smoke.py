@@ -2,12 +2,40 @@
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 from frlg_rng_assist_core.backend import backend, predict, recover
 from frlg_rng_assist_core.launcher import run_gift
 from frlg_rng_assist_core.model import Criteria
+from frlg_rng_assist_core.encounters import ENCOUNTERS, default_offset, offset_flag
 from frlg_rng_assist_core.native import ACK, console_arguments, install_plan, write_gift
+
+
+def check_catalog_offsets(installer, plugin_root):
+    """Use the actual host form-to-argv path, including conditional field visibility."""
+    from pokeldn.app import command
+    from install import build_parser
+
+    tool = replace(installer, script=str(Path(plugin_root) / "install.py"))
+    settings = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
+                               ids=lambda game: (12345, 2791), name=lambda game: "TEST")
+    for target in ENCOUNTERS:
+        values = {"--target": target}
+        visible = [field for field in tool.fields if str(field.flag).startswith("--offset-")
+                   and command.applies(field, tool, values)]
+        assert len(visible) == 1 and visible[0].flag == offset_flag(target)
+        assert visible[0].kind == "number" and not visible[0].hidden
+        assert command.value_of(visible[0], values) == str(default_offset(target))
+        parsed = build_parser().parse_args(command.build(tool, values, {}, settings))
+        assert (parsed.target, parsed.offset) == (target, default_offset(target))
+    values = {"--target": "articuno", "--offset-articuno": "17"}
+    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 17
+    values["--target"] = "deoxys"
+    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 501
+    values["--target"] = "articuno"
+    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 17
 
 
 def main():
@@ -35,8 +63,7 @@ def main():
     catalog = Catalog()
     plugin.register(catalog)
     installer = next(tool for tool in catalog.tools if tool.key == "frlg-rng-assist-install")
-    offset_field = next(field for field in installer.fields if field.flag == "--offset")
-    assert offset_field.kind == "number" and offset_field.default == "" and not offset_field.hidden
+    check_catalog_offsets(installer, plugin_root)
     work = Path(args.work).resolve()
     work.mkdir(exist_ok=True)
     lcg, _ = backend()
@@ -44,15 +71,15 @@ def main():
     mon = predict(seed, 12345, 2791)
     assert {"generation_seed": seed, "method": 1} in recover(mon["personality"], mon["ivs"])
     results = []
-    for game, target in (("firered", "mewtwo"), ("leafgreen", "articuno")):
+    for game, target in (("firered", "mewtwo"), ("leafgreen", "articuno"),
+                         ("firered", "deoxys"), ("leafgreen", "sweet-land"), ("firered", "fish-super")):
         plan = install_plan(
             game, "auto", target, criteria=Criteria(shiny=False),
             offset=3 if target == "articuno" else None,
         )
-        assert plan["offset_advances"] == (3 if target == "articuno" else 2)
-        assert plan["auto_a_offset_advances"] == (5 if target == "articuno" else 3)
-        gift = work / f"{game}.pokegift"
-        exported = work / f"{game}-host-export.pokegift"
+        assert plan["offset_advances"] == default_offset(target)
+        gift = work / f"{game}-{target}.pokegift"
+        exported = work / f"{game}-{target}-host-export.pokegift"
         info = write_gift(plan, gift)
         assert (
             run_gift(

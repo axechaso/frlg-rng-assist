@@ -1,9 +1,9 @@
 id = "frlg-rng-assist"
 name = "FRLG RNG Assist"
-version = "0.3.9"
+version = "0.4.0"
 api = "1.11"
 author = "axechaso"
-description = "超梦与三鸟 RNG 辅助：设置 advances 范围、Offset 和条件，掌机显示 seed / 倒计时，到点自动 A；L+R 查看队尾 PID，支持捕获核对与离线搜索。"
+description = "定点、礼物及野生 RNG 辅助：按目标预填 Offset，搜索 advances 范围与条件，到点触发一次（凤王 ↑、其余 A）；含菜单显示与队尾 PID。"
 library = "FRLG RNG Assist"
 library_sort = "date-desc"
 exclude = ["dist", "tests", "scripts/release_smoke.py", "pokeldn-source.json"]
