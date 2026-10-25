@@ -36,7 +36,7 @@ def test_preview_exports_a_real_gift_without_starting_a_host(tmp_path, monkeypat
     ("articuno", 0, 2, 2), ("articuno", 3, 2, 5),
     ("mewtwo", 3, 1, 4), ("moltres", 65533, 2, 65535),
     ("deoxys", None, 2, 503), ("lugia", None, 2, 279),
-    ("sweet-land", None, 1, 1), ("fish-super", 1000, 1, 1001),
+    ("sweet-land", None, 1, 257), ("fish-super", 1000, 1, 1001),
 ])
 def test_preview_records_effective_offset_and_preserves_range(tmp_path, target, offset, base, total, capsys):
     output = tmp_path / "offset.json"

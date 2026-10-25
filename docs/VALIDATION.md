@@ -1,4 +1,20 @@
-# 0.4.0 validation record
+# 0.5.0 validation record
+
+Date: 2026-10-25. **907 pytest cases passed in 104.96 s; Ruff, guest reproduction and offline frozen-host checks passed. Physical-console acceptance remains pending.**
+
+The catalog now registers exactly two tools: live search / timed input and manual PID lookup. Both initial seed and PID are empty required text fields; the user fills them in. The real pinned-host form validation and command builder check every category and target, stale selections from other categories, the static Method 1 / 4 restriction, all wild locations under both games, automatic preset selection and explicit manual overrides. Blank optional Offset / original-target fields pass validation, while explicit zero survives command construction and the backend still rejects out-of-range values. Unknown wild reference delays use 256; the supplied columns are FireRed / LeafGreen, including Safari 256 / 257 and Power Plant unknown / 263.
+
+The compiled resident's R page is decoded from actual rendered tile pixels across all four supported builds, all 24 encrypted-block orders, party-tail changes, checksum / Bad Egg / missing-record refusal, Hidden Power bit patterns, map / menu countdown and one-shot input. GetMonData is called with MON_DATA_IVS=66 on a stack copy, never the live party. The ROM accessor is substituted by a contract fixture that reproduces XOR / shuffle / checksum behavior; its actual game-ROM body and execution cycles have not been run. Store-address checks retain the no-RNG / party / save / ROM-write condition. L / L+R retain their initial-seed and PID views, and all shoulder-key views preserve hidden miss notices.
+
+The hardware overlay is written after the original VBlank OAM copy. A synthetic original callback copies gMain.oamBuffer into hardware OAM before the compiled hook patches only slots 120..127. Checks verify the game buffer is untouched, earlier hardware slots survive, and menu suppression restores the game's OAM. The new state layout removes redundant generation / lock copies; its cursor is the selected generation seed while FOUND. Entry memory barriers delimit callback snapshots; the shim still masks IME while restoring / validating / emitting its one input. The existing RAM reservation is unchanged: **2192 / 2200 bytes**. GCC 15.2.1 reproduces guest.json with build_guest.py --check.
+
+PID-only recovery enumerates consecutive PID-half states and validates each wild / Unown rejection prefix by forward generation. Range endpoints, ambiguous starts, no-match results, Method restrictions and Offset corrections are checked. The user's C76F / 4762A09B case yields advance 3354, with +3 against target 3351; existing extra Offset 3 gives suggestion 6. Reported IVs are explicitly predictions, and no PID result is labeled proof of input timing.
+
+The final 0.5.0 package was read and installed in isolated data by the official frozen PokeLDN v0.39.1 Windows executable, with Python module fallback disabled. Its reader checked version / API, 31 archive files, source / guest SHA-256 and RAM bounds. The installed copy passed the actual catalog validation / command checks, the manual lookup's human-output path and five real gift exports (FireRed Mewtwo / Deoxys / Super Rod, LeafGreen Articuno / Sweet Scent). All three frozen processes exited 0 with empty stderr; evidence is in ignored dist/packed-050-final2-*.log. These are offline checks, not native GUI rendering, radio, game-ROM or hardware acceptance.
+
+The following records describe older versions. Their flat lists, additional catalog tools, R-alone behavior and Offset defaults are superseded by 0.5.0.
+
+## 0.4.0 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
 

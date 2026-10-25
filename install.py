@@ -5,17 +5,19 @@ import json
 
 from frlg_rng_assist_core.arguments import console_arguments, ivs, nature
 from frlg_rng_assist_core.display import card
-from frlg_rng_assist_core.encounters import ENCOUNTERS, UNOWN_CHAMBERS, offset_flag
+from frlg_rng_assist_core.encounters import ENCOUNTERS, offset_flag
 from frlg_rng_assist_core.launcher import HostFailure, run_gift
 from frlg_rng_assist_core.native import console_arguments as host_arguments
 from frlg_rng_assist_core.model import Criteria
 from frlg_rng_assist_core.native import install_plan, validate_install_ack, write_gift
 from frlg_rng_assist_core.records import capture_path, report_path, save_report
+from frlg_rng_assist_core.selection import normalize_selection, selection_arguments
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     console_arguments(parser)
+    selection_arguments(parser)
     parser.add_argument("--enable-auto-a", action="store_true", help="安装并启用到点按键；凤王为 ↑，其他目标为 A")
     parser.add_argument("--start", type=int, default=10000, help="从标题实际初始 seed 起算的 advance 下限")
     parser.add_argument("--end", type=int, default=200000, help="advance 上限，含端点，最大 9999999")
@@ -24,8 +26,7 @@ def build_parser():
     for target in ENCOUNTERS:
         offsets.add_argument(offset_flag(target), dest="offset", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--method", type=int, choices=(1, 2, 4), default=1,
-                        help="定点 1/2/4；野生 H1/H2/H4，通常用 1")
-    parser.add_argument("--chamber", choices=UNOWN_CHAMBERS, default="monean", help="未知图腾的房间")
+                        help="定点 1/4；野生 H1/H2/H4，通常用 1")
     parser.add_argument("--nature", type=nature, help="性格：中文、英文或 0..24；留空不限")
     parser.add_argument("--iv-min", type=ivs, default=(0, 0, 0, 0, 0, 0))
     parser.add_argument("--iv-max", type=ivs, default=(31, 31, 31, 31, 31, 31))
@@ -36,12 +37,12 @@ def build_parser():
 
 def main(argv=None):
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = normalize_selection(parser.parse_args(argv))
     try:
         criteria = Criteria(not args.allow_normal, args.nature, None, args.iv_min, args.iv_max)
         plan = install_plan(
             args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria,
-            offset=args.offset, method=args.method, chamber=args.chamber,
+            offset=args.offset, method=args.method, chamber=args.chamber, location=args.location,
         )
         if not args.preview and not args.enable_auto_a:
             raise ValueError("请勾选「安装并启用到点按键」；只检查配置可选择「仅预览」。")
@@ -90,7 +91,7 @@ def main(argv=None):
             print("颜色变化不会提前丢弃原目标；原目标保留到指定时机。")
             print("错过或本次按键失败时，红色 D 原因码在地图保留约 1 秒，再自动续搜；在电视里错过则返回地图后提示。")
             print("续搜保留初始 seed 和筛选条件，不补按旧目标。发送一次按键后结束；E=范围耗尽，F=计数失效，也会结束。")
-            print("捕获后把目标留在队伍中，游戏内保存，再运行「核对捕获结果」。")
+            print("按 R 查看队尾 IV / 觉醒力量；按 L+R 读取 PID，用「PID 反查实际命中」输入初始 seed 和 PID。")
             print("软重启或关闭游戏会清除注入；下一次尝试需重新安装。")
         print(f"报告：{output}")
         card(

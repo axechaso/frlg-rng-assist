@@ -33,6 +33,7 @@ def build():
                 "-mthumb-interwork",
                 "-Oz",
                 "-fno-inline",
+                "-fno-move-loop-invariants",
                 "-fno-builtin",
                 "-ffreestanding",
                 "-fomit-frame-pointer",

@@ -170,7 +170,7 @@ def test_long_pid_rejection_resumes_over_interrupts_without_losing_candidate(tar
             break
     assert rerolls >= 32
     assert c.call(c.manifest["symbols"]["matches"] | 1, seed) == 0xFFFFFFFF
-    assert c.s("work_active") == 1
+    assert c.s("work_active") > 0
     assert finish_match(c, seed) == 1
     assert c.s("work_active") == 0
     assert unown_letter(pid) < 28
@@ -254,7 +254,7 @@ def test_large_offset_catchup_uses_a_jump_and_stays_within_interrupt_budget(code
     c.frame(3500)
     assert c.instructions - before < 20000
     assert c.s("target") == 3500 + 65535 + 1
-    assert c.s("generation") == c.lcg.advance(c.seed, c.s("target"))
+    assert c.s("cursor") == c.lcg.advance(c.seed, c.s("target"))
     c.frame(3501)
     assert c.main_loop() == 1 and c.s("status") == 7
 

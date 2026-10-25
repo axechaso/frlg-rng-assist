@@ -73,7 +73,7 @@ def test_custom_offset_changes_press_and_colour_without_moving_generation_target
     c.frame(start)
     c.frame(start + 2)
     assert c.s("target") == 3351
-    assert c.s("generation") == lcg.advance(0xC76F, 3351)
+    assert c.s("cursor") == lcg.advance(0xC76F, 3351)
     assert c.read(c.profile["palette"], 2) == 0x03E0
     c.frame(press - 1)
     assert c.read(c.profile["palette"], 2) == 0x02FF

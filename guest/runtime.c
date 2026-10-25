@@ -11,18 +11,22 @@ typedef void (*callback)(void);
 #define U8(a) (*(volatile u8 *)(a))
 
 struct Config {
-    u32 main, rng, sb2ptr, cb1, cb2, original, seed_getter, palette, party, party_count, battle_cb2;
+    u32 main, rng, sb2ptr, cb1, cb2, original, seed_getter, palette, party, party_count, battle_cb2, mon_data;
     u32 first, last, jump_a, jump_c, offset_a, offset_c;
     u16 offset;
     u8 model, method, shiny, nature, menus, button, minimum[6], maximum[6], letters[12];
 };
-__attribute__((section(".config"), used)) volatile struct Config config = {0};
+__attribute__((section(".config"), used)) struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
 /* Keep existing timing / Mewtwo reason numbers; retired bird gates have no code. */
 enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIRED };
-struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason, locked, notice;
-    u32 call_slot, call_original, call_context, work_cursor, work_nature, work_active; };
-__attribute__((section(".state"), used)) volatile struct State state = {0};
+/* All cross-callback access is bounded by function calls / IRQ masking. The
+ * entry barriers below keep ordinary RAM snapshots on their callback boundary. */
+struct State { u8 status, reason, notice, work_active;
+    u32 initial, seed, index, cursor, next, target, shown;
+    u32 call_slot, call_original, call_context, work_cursor;
+};
+__attribute__((section(".state"), used)) struct State state = {0};
 #define C config
 #define S state
 
@@ -59,6 +63,7 @@ __attribute__((noinline)) u32 readiness(void) {
  * script pass, plus the VBlanks between the script's native yields.
  * Require that exact successor; extra draws / reseeds still cancel the A. */
 __attribute__((noinline)) void press_shim(void) {
+    __asm__ volatile ("" ::: "memory");
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
     U32(S.call_slot) = S.call_original;
@@ -96,14 +101,15 @@ __attribute__((noinline)) int matches(u32 seed) {
                 static const u8 ends[11] = {20, 40, 50, 60, 70, 80, 85, 90, 94, 98, 99};
                 u32 slot = 0;
                 while (slot < 11 && n >= ends[slot]) ++slot;
-                S.work_nature = C.letters[slot];
+                S.work_active = C.letters[slot] + 1;
                 a = step(a);
             } else {
                 a = step(step(a)); /* slot, level, nature; no Synchronize in FRLG */
-                S.work_nature = nature_of(a >> 16, 0);
-                if (C.nature != 255 && S.work_nature != C.nature) return 0;
+                u32 wanted = nature_of(a >> 16, 0);
+                if (C.nature != 255 && wanted != C.nature) return 0;
+                S.work_active = wanted + 1;
             }
-            S.work_cursor = a; S.work_active = 1;
+            S.work_cursor = a;
         }
         a = S.work_cursor;
         /* Resume difficult candidates next VBlank instead of an unbounded IRQ loop. */
@@ -116,7 +122,7 @@ __attribute__((noinline)) int matches(u32 seed) {
                 n = (lo & 3) | ((lo >> 6) & 12) | ((hi << 4) & 48) | ((hi >> 2) & 192);
                 while (n >= 28) n -= 28;
             }
-            if (n == S.work_nature) { S.work_active = 0; goto rolled; }
+            if (n + 1 == S.work_active) { S.work_active = 0; goto rolled; }
         }
         S.work_cursor = a;
         return -1;
@@ -147,35 +153,57 @@ static const u16 font[16] = {0x7B6F, 0x749A, 0x73E7, 0x79E7, 0x49ED, 0x79CF, 0x7
 static u32 bcd(u32 n) {
     u32 result = 0;
     for (u32 i = 0; i < 24; ++i) {
-        result += 0x33333333;
-        result -= ((~result >> 3) & 0x11111111) * 3;
+        u32 carry = (result + 0x33333333) & 0x88888888;
+        result += (carry >> 2) | (carry >> 3);
         result = (result << 1) | ((n >> 23) & 1);
         n <<= 1;
     }
     return result;
 }
 
+/* GetMonData(MON_DATA_IVS=66) checks the encrypted record and its checksum.
+ * Run it on a stack copy: the game's accessor decrypts / re-encrypts its input
+ * and marks bad checksums, so passing the live party would write to it. */
+static void party_values(u32 *values, u32 keys) {
+    u32 count = U8(C.party_count);
+    values[0] = 0xFFFFFFFF;
+    values[1] = keys & 0x200 ? 0 : 0xFFFFFFFF;
+    if (--count >= 6) return;
+    u32 mon = C.party + count * 100;
+    if (keys & 0x200) { values[0] = U32(mon); values[1] = count + 1; return; }
+    u32 copy[25];
+    for (u32 i = 0; i < 25; ++i) copy[i] = U32(mon + i * 4);
+    u32 ivs = ((u32 (*)(u32 *, u32, void *))C.mon_data)(copy, 66, 0);
+    if ((((u8 *)copy)[19] & 3) != 2) return;
+    u32 type = 0, power = 0;
+    values[0] = values[1] = 0;
+    for (u32 i = 0; i < 6; ++i, ivs >>= 5) {
+        type |= (ivs & 1) << i;
+        power |= ((ivs >> 1) & 1) << i;
+        values[i >> 2] = (values[i >> 2] << 8) | bcd(ivs & 31);
+    }
+    type *= 15; power *= 40;
+    /* Exact /63 for these bounded numerators, without a software divider. */
+    values[1] = (values[1] << 16) | (bcd(((type + (type >> 6) + 1) >> 6) + 1) << 8)
+        | bcd(((power + (power >> 6) + 1) >> 6) + 30);
+}
+
 /* Eight 8x16 objects use the same final eight OAM slots as the upstream overlay.
  * Dynamic upper/lower tiles show all eight seed digits and a status + 7-digit count.
  */
-__attribute__((noinline)) void tiles(void) {
+__attribute__((noinline)) void tiles(u32 keys) {
     u32 values[2] = {S.seed, S.shown};
-    u32 keys = U16(C.main + 0x2C);
-    if ((keys & 0x300) == 0x300) {
-        /* Pokemon starts with an unencrypted u32 PID; party entries are 100
-         * bytes. The count is a byte, and must be checked before indexing. */
-        u32 count = U8(C.party_count);
-        if (count > 6) count = 0;
-        values[0] = count ? U32(C.party + (count - 1) * 100) : 0xFFFFFFFF;
-        values[1] = count;
+    if (keys & 0x100) {
+        party_values(values, keys);
     } else if (keys & 0x200) {
-        values[0] = S.initial; values[1] = S.index < 10000000 ? bcd(S.index) : 0xFFFFFFFF;
+        values[0] = S.initial; values[1] = S.status == DESYNC ? 0xFFFFFFFF : bcd(S.index);
     }
     for (u32 row = 0; row < 2; ++row) {
+        volatile u32 *tile = (volatile u32 *)(0x06017E00 + row * 32);
+        u32 value = values[row];
         for (u32 digit = 0; digit < 8; ++digit) {
-            u32 bits = font[(values[row] >> 28) & 15];
-            values[row] <<= 4;
-            volatile u32 *tile = (volatile u32 *)(0x06017E00 + digit * 64 + row * 32);
+            u32 bits = font[value >> 28];
+            value <<= 4;
             tile[0] = tile[6] = tile[7] = 0x22222222;
             for (u32 y = 1; y < 6; ++y) {
                 u32 pixels = 0x22222222;
@@ -185,27 +213,24 @@ __attribute__((noinline)) void tiles(void) {
                 bits >>= 3;
                 tile[y] = pixels;
             }
+            tile += 16;
         }
     }
 }
 
 __attribute__((section(".entry"), used)) void hook(void) {
+    __asm__ volatile ("" ::: "memory");
     u32 idle = !(U16(C.main + 0x1C) & 1);
     /* A second interrupt before callback1 means the pending press has expired. */
     if (S.status == PENDING) {
         if (U32(S.call_slot) == (u32)press_shim) U32(S.call_slot) = S.call_original;
         miss(EXPIRED);
     }
-    if (!readiness() && (S.status || overworld())) {
-        for (u32 i = 0; i < 8; ++i) {
-            u32 oam = C.main + 0x3F8 + i * 8;
-            U16(oam) = 0x8002; U16(oam + 2) = 174 + i * 8; U16(oam + 4) = 0xF3F0 + i * 2;
-        }
-    }
     ((callback)C.original)();
+    u32 initial = ((u16 (*)(void))C.seed_getter)();
     if (!S.status) {
         if (!overworld()) return;
-        S.initial = ((u16 (*)(void))C.seed_getter)();
+        S.initial = initial;
         S.cursor = S.initial * C.jump_a + C.jump_c;
         S.next = C.first;
         S.status = SEARCH;
@@ -213,7 +238,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
     S.seed = U32(C.rng);
     u32 index = distance(S.initial, S.seed);
     u32 delta = index - S.index;
-    if (index < S.index || index > 9999999 || S.initial != ((u16 (*)(void))C.seed_getter)()) S.status = DESYNC;
+    if (index < S.index || index > 9999999 || S.initial != initial) S.status = DESYNC;
     S.index = index;
     u32 reason = readiness();
     u32 stable = idle && delta == 2 && !reason;
@@ -221,7 +246,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
      * Static map profiles retain the notice in menus; tracking continues throughout.
      * Catch-up rebases from the live RNG, within the original range / epoch. */
     if (S.status == MISSED && !S.notice && idle && !reason) {
-        ++S.next; S.cursor = step(S.cursor); S.locked = 0; S.status = SEARCH;
+        ++S.next; S.cursor = step(S.cursor); S.status = SEARCH;
         S.work_active = 0;
     }
     if (S.status == FOUND) {
@@ -249,7 +274,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
             int match = (!stable || !((S.next - C.offset - S.index) & 1)) ? matches(S.cursor) : 0;
             if (match < 0) break;
             if (match) {
-                S.target = S.next; S.generation = S.cursor; S.locked = 1; S.status = FOUND; break;
+                S.target = S.next; S.status = FOUND; break;
             }
             ++S.next; S.cursor = step(S.cursor);
             S.work_active = 0;
@@ -258,25 +283,29 @@ __attribute__((section(".entry"), used)) void hook(void) {
     }
     u32 display = S.status;
     u32 n = 0;
-    if (display == SEARCH || display == FOUND) S.reason = reason;
-    if (display == SEARCH) { display = 10; n = S.next; }
+    if (display == SEARCH) n = S.next;
     else if (display == FOUND) {
-        display = 11;
         n = S.target - C.offset - S.index;
     }
-    else if (display == FIRED || display == PENDING) { n = display == PENDING; display = 12; }
-    else if (display == MISSED) { display = 13; n = S.reason; }
-    else if (display == EXHAUSTED) display = 14;
-    else display = 15;
+    else if (display == MISSED) n = S.reason;
+    else n = display == PENDING;
+    display = (0xCCFDEBAF >> (display * 4)) & 15;
     S.shown = (display << 28) | bcd(n);
     if (!reason) {
+        /* Original VBlank has copied the game's OAM. Patch the final eight
+         * hardware slots now; leave gMain.oamBuffer untouched. This is the
+         * same VBlank window in which we update palette and OBJ tiles. */
+        for (u32 i = 0; i < 8; ++i) {
+            u32 oam = 0x070003C0 + i * 8;
+            U16(oam) = 0x8002; U16(oam + 2) = 174 + i * 8; U16(oam + 4) = 0xF3F0 + i * 2;
+        }
         u32 keys = U16(C.main + 0x2C);
-        if (S.status == MISSED && S.notice && !(keys & 0x200)) --S.notice;
-        u32 color = (keys & 0x300) == 0x300 ? 0x7FFF : S.status == MISSED ? 0x001F
+        if (S.status == MISSED && S.notice && !(keys & 0x300)) --S.notice;
+        u32 color = keys & 0x100 ? 0x7FFF : S.status == MISSED ? 0x001F
             : S.status == FOUND
                 ? (reason || ((S.target - C.offset - S.index) & 1) ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;
         U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
-        tiles();
+        tiles(keys);
     }
 }

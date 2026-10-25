@@ -9,8 +9,9 @@ from types import SimpleNamespace
 from frlg_rng_assist_core.backend import backend, predict, recover
 from frlg_rng_assist_core.launcher import run_gift
 from frlg_rng_assist_core.model import Criteria
-from frlg_rng_assist_core.encounters import ENCOUNTERS, default_offset, offset_flag
+from frlg_rng_assist_core.encounters import CATEGORIES, WILD_LOCATIONS, allowed_methods, default_offset
 from frlg_rng_assist_core.native import ACK, console_arguments, install_plan, write_gift
+from frlg_rng_assist_core.selection import method_flag, normalize_selection, target_flag
 
 
 def check_catalog_offsets(installer, plugin_root):
@@ -21,21 +22,42 @@ def check_catalog_offsets(installer, plugin_root):
     tool = replace(installer, script=str(Path(plugin_root) / "install.py"))
     settings = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
                                ids=lambda game: (12345, 2791), name=lambda game: "TEST")
-    for target in ENCOUNTERS:
-        values = {"--target": target}
-        visible = [field for field in tool.fields if str(field.flag).startswith("--offset-")
-                   and command.applies(field, tool, values)]
-        assert len(visible) == 1 and visible[0].flag == offset_flag(target)
-        assert visible[0].kind == "number" and not visible[0].hidden
-        assert command.value_of(visible[0], values) == str(default_offset(target))
-        parsed = build_parser().parse_args(command.build(tool, values, {}, settings))
-        assert (parsed.target, parsed.offset) == (target, default_offset(target))
-    values = {"--target": "articuno", "--offset-articuno": "17"}
-    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 17
-    values["--target"] = "deoxys"
-    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 501
-    values["--target"] = "articuno"
-    assert build_parser().parse_args(command.build(tool, values, {}, settings)).offset == 17
+    # Retain stale values from previously visited categories, exactly as the form
+    # does. They must neither display nor leak into the command being launched.
+    values = {target_flag(category): targets[-1] for category, (_, targets) in CATEGORIES.items()}
+    parser = build_parser()
+    for category, (_, targets) in CATEGORIES.items():
+        for target in targets:
+            values.update({"--category": category, target_flag(category): target})
+            active = [f for f in tool.fields if f.flag.startswith("--target-") and command.applies(f, tool, values)]
+            assert len(active) == 1 and active[0].flag == target_flag(category)
+            methods = [f for f in tool.fields if f.flag.startswith("--method-") and command.applies(f, tool, values)]
+            assert len(methods) == 1
+            assert tuple(int(v) for v, _ in methods[0].choices) == allowed_methods(target)
+            for method in allowed_methods(target):
+                values[method_flag(category)] = str(method)
+                assert not command.problems(tool, values)
+                parsed = normalize_selection(parser.parse_args(command.build(tool, values, {}, settings)))
+                assert (parsed.target, parsed.method, parsed.offset) == (target, method, None)
+                plan = install_plan(parsed.game, parsed.build, parsed.target, method=parsed.method)
+                assert plan["offset_advances"] == default_offset(target)
+    for game in ("firered", "leafgreen"):
+        for location, _ in WILD_LOCATIONS:
+            values.update({"--game": game, "--category": "wild", "--location": location,
+                           "--target-wild": "sweet-land"})
+            assert not command.problems(tool, values)
+            parsed = normalize_selection(parser.parse_args(command.build(tool, values, {}, settings)))
+            plan = install_plan(parsed.game, parsed.build, parsed.target, location=parsed.location)
+            assert plan["offset_advances"] == default_offset(parsed.target, game, location)
+    values.update({"--category": "legends", "--target-legends": "articuno"})
+    for offset in ("0", "17"):
+        values["--offset"] = offset
+        assert not command.problems(tool, values)
+        assert parser.parse_args(command.build(tool, values, {}, settings)).offset == int(offset)
+    values["--offset"] = ""
+    assert not command.problems(tool, values)
+    parsed = normalize_selection(parser.parse_args(command.build(tool, values, {}, settings)))
+    assert install_plan(parsed.game, parsed.build, parsed.target, offset=parsed.offset)["offset_advances"] == 3
 
 
 def main():
@@ -62,10 +84,34 @@ def main():
 
     catalog = Catalog()
     plugin.register(catalog)
+    assert [t.key for t in catalog.tools] == ["frlg-rng-assist-install", "frlg-rng-assist-lookup"]
     installer = next(tool for tool in catalog.tools if tool.key == "frlg-rng-assist-install")
     check_catalog_offsets(installer, plugin_root)
     work = Path(args.work).resolve()
     work.mkdir(exist_ok=True)
+    # Exercise the second tool through the real form parser as a manual, offline
+    # operation. No radio or IV input is accepted / needed for PID lookup.
+    from pokeldn.app import command
+    from lookup import build_parser as lookup_parser, main as lookup_main
+
+    lookup_tool = replace(catalog.tools[1], script=str(plugin_root / "lookup.py"))
+    settings = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
+                               ids=lambda game: (12345, 2791), name=lambda game: "TEST")
+    values = {"--category": "legends", "--target-legends": "articuno", "--initial-seed": "C76F",
+              "--pid": "4762A09B", "--output": str(work / "manual-pid.json")}
+    assert not command.problems(lookup_tool, values)
+    without_correction = lookup_parser().parse_args(command.build(lookup_tool, values, {}, settings))
+    assert without_correction.offset is None and without_correction.target_advance is None
+    values["--target-advance"] = "3351"
+    assert not command.problems(lookup_tool, values)
+    argv = command.build(lookup_tool, values, {}, settings)
+    parsed = normalize_selection(lookup_parser().parse_args(argv))
+    assert parsed.initial_seed == 0xC76F and parsed.pid == 0x4762A09B and parsed.target == "articuno"
+    assert "--keys" not in argv and "--radio" not in argv and "--ivs" not in argv
+    assert lookup_main(argv) == 0
+    hit = json.loads((work / "manual-pid.json").read_text(encoding="utf-8"))
+    assert hit["result"] == "unique" and hit["candidates"][0]["actual_advance"] == 3354
+    assert hit["candidates"][0]["suggested_offset"] == 6
     lcg, _ = backend()
     seed = lcg.advance(0xB8C0, 20000)
     mon = predict(seed, 12345, 2791)

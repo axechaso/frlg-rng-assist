@@ -8,7 +8,10 @@ import struct
 
 from .backend import backend, bounded
 from .model import Criteria
-from .encounters import BASE_PRESS_OFFSETS, ENCOUNTERS, UNOWN_CHAMBERS, default_offset
+from .encounters import (
+    BASE_PRESS_OFFSETS, ENCOUNTERS, UNOWN_CHAMBERS, WILD_LOCATIONS, allowed_methods,
+    default_offset, offset_source,
+)
 
 
 GAMES = {"firered": "火红", "leafgreen": "叶绿"}
@@ -34,6 +37,7 @@ PROFILES = {
         "party": 0x02024280,
         "party_count": 0x02024025,
         "battle_cb2": 0x0801489D,
+        "mon_data": 0x08043391,
         "table": 0x030027E0,
     },
     "BPRF": {
@@ -52,6 +56,7 @@ PROFILES = {
         "party": 0x02024280,
         "party_count": 0x02024025,
         "battle_cb2": 0x08014889,
+        "mon_data": 0x080432E5,
         "table": 0x03002730,
     },
 }
@@ -69,6 +74,7 @@ CONFIG_WORDS = (
     "party",
     "party_count",
     "battle_cb2",
+    "mon_data",
 )
 
 
@@ -83,7 +89,7 @@ def validate_context(game, build, target):
 
 
 def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None,
-                 method=1, chamber="monean"):
+                 method=1, chamber="monean", location="other"):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -93,9 +99,11 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         raise ValueError("实机搜索仅支持闪光、性格及 IV 条件；精确 PID 请使用离线搜索")
     encounter = ENCOUNTERS[target]
     base_offset = BASE_PRESS_OFFSETS[encounter.profile]
-    extra_offset = default_offset(target) if offset is None else bounded(offset, 0, 65533, "Offset")
-    if type(method) is not int or method not in (1, 2, 4):
-        raise ValueError("仅支持 Method 1 / 2 / 4；野生对应 H1 / H2 / H4")
+    if location not in dict(WILD_LOCATIONS):
+        raise ValueError("野生地点无效")
+    extra_offset = default_offset(target, game, location) if offset is None else bounded(offset, 0, 65533, "Offset")
+    if type(method) is not int or method not in allowed_methods(target):
+        raise ValueError("定点仅支持 Method 1 / 4；野生支持 H1 / H2 / H4")
     if chamber not in UNOWN_CHAMBERS:
         raise ValueError("未知图腾房间无效")
     return {
@@ -117,8 +125,10 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         "criteria": asdict(criteria),
         "method": method,
         "model": encounter.model,
+        "location": location if encounter.model != "static" else None,
         "chamber": chamber if encounter.model == "unown" else None,
-        "offset_source": encounter.delay_source if extra_offset == default_offset(target) else "manual",
+        "offset_source": (offset_source(target, game, location)
+                          if extra_offset == default_offset(target, game, location) else "manual"),
         "decision_point": encounter.decision,
         "trigger_button": "UP" if encounter.button == 64 else "A",
         "trigger_key_mask": encounter.button,
@@ -151,7 +161,7 @@ def resident(plan, code):
     offset_a = (lcg.advance(1, advance) - offset_c) & 0xFFFFFFFF
     order = (0, 1, 2, 5, 3, 4)  # Random's IV fields: HP, ATK, DEF, SPE, SPA, SPD.
     settings = struct.pack(
-        "<17IH30B",
+        "<18IH30B",
         *(profile[name] for name in CONFIG_WORDS),
         first,
         plan["range"]["last"],

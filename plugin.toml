@@ -1,9 +1,9 @@
 id = "frlg-rng-assist"
 name = "FRLG RNG Assist"
-version = "0.4.0"
+version = "0.5.0"
 api = "1.11"
 author = "axechaso"
-description = "定点、礼物及野生 RNG 辅助：按目标预填 Offset，搜索 advances 范围与条件，到点触发一次（凤王 ↑、其余 A）；含菜单显示与队尾 PID。"
+description = "定点与野生 RNG：分类选择目标和地点，按火红 / 叶绿套用 Offset，到点按键；R 查看队尾 IV / 觉醒力量，手填 PID 反查命中。"
 library = "FRLG RNG Assist"
 library_sort = "date-desc"
-exclude = ["dist", "tests", "scripts/release_smoke.py", "pokeldn-source.json"]
+exclude = ["dist", "tests", "scripts/release_smoke.py", "pokeldn-source.json", "verify.py", "search.py", "recover.py"]

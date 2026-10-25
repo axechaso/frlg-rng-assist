@@ -50,9 +50,9 @@ def test_lr_reads_last_live_party_pid_for_every_party_size_and_restores_countdow
     assert c.read(c.profile["palette"], 2) == 0x7FFF
     assert c.s("index") == 3501
     assert c.s("target") == 20000
-    c.write(c.profile["main"] + 0x2C, 0x100, 2)  # R alone restores normal display.
+    c.write(c.profile["main"] + 0x2C, 0x100, 2)  # Invalid encrypted fixture gives an invalid IV page.
     c.frame(3503)
-    assert overlay_values(c) == (c.s("seed"), c.s("shown"))
+    assert overlay_values(c) == (0xFFFFFFFF, 0xFFFFFFFF)
     assert c.s("shown") == 0xB0016492
     c.write(c.profile["main"] + 0x2C, 0, 2)
     c.frame(3505)
@@ -153,7 +153,7 @@ def test_wireless_link_draw_before_callback_is_expected_and_preserves_generation
     ]
     assert c.s("status") == 7
     assert c.read(c.profile["main"]) == c.profile["cb1"]
-    assert c.presses[0][0] == c.s("generation") == c.lcg.advance(c.seed, 20000)
+    assert c.presses[0][0] == c.s("cursor") == c.lcg.advance(c.seed, 20000)
     c.frame(20002)
     assert c.main_loop() == 0
     assert len(c.presses) == 1
@@ -336,7 +336,7 @@ def test_real_shiny_candidate_is_found_over_multiple_batches_and_pressed_once(co
         if c.s("status") == 2:
             break
     assert c.s("status") == 2
-    generation = c.s("generation")
+    generation = c.s("cursor")
     assert predict(generation, 12345, 2791)["shiny"]
     c.frame(c.s("target") - offset)
     assert c.main_loop() == 1
@@ -408,7 +408,7 @@ def test_birds_press_once_at_deadline_without_any_held_button(code, target):
     assert c.s("shown") == 0xB0016494
     assert c.read(c.profile["palette"], 2) == 0x03E0
     c.frame(3503)
-    assert c.s("locked") == 1
+    assert c.s("status") == 2
     assert c.s("shown") == 0xB0016492
     assert c.read(c.profile["palette"], 2) == 0x03E0
     assert c.main_loop() == 0  # Never press before the selected advance.
@@ -472,7 +472,7 @@ def test_no_stores_to_rng_pokemon_save_blocks_or_rom(held):
     allowed = [
         (c.manifest["base"], 0x02040000),
         (0x03007800, 0x03007D00),
-        (p["main"] + 0x3F8, p["main"] + 0x438),
+        (0x070003C0, 0x07000400),
         (p["main"], p["main"] + 4),
         (p["main"] + 0x2C, p["main"] + 0x30),
         (0x06017E00, 0x06018000),
@@ -503,7 +503,7 @@ def test_first_visible_candidate_is_retained_even_if_a_later_stride_changes_pari
     assert c.s("target") == 20000
     assert c.s("shown") == 0xB0016495
     assert c.read(c.profile["palette"], 2) == 0x02FF
-    assert c.s("locked") == 1
+    assert c.s("status") == 2
     c.frame(19997)  # A later odd interval restores the original candidate's parity.
     assert c.main_loop() == 1
     assert c.s("status") == 7
@@ -585,13 +585,18 @@ def test_seed_and_pid_views_do_not_consume_a_hidden_miss_reason(code, held):
 
 
 @pytest.mark.parametrize("code", PROFILES)
-def test_r_alone_does_not_hide_or_pause_the_miss_notice(code):
+def test_r_iv_view_retains_the_hidden_miss_notice_until_released(code):
     c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3500)
     c.frame(19997)
     notice = c.s("notice")
     c.write(c.profile["main"] + 0x2C, 0x100, 2)
     c.frame(20001)
+    assert c.s("notice") == notice
+    assert overlay_values(c) == (0xFFFFFFFF, 0xFFFFFFFF)
+    assert c.read(c.profile["palette"], 2) == 0x7FFF
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    c.frame(20003)
     assert c.s("notice") == notice - 1
     assert overlay_values(c) == (c.s("seed"), 0xD0000009)
     assert c.read(c.profile["palette"], 2) == 0x001F
@@ -608,13 +613,13 @@ def test_tv_bursts_keep_a_future_target_and_report_an_overrun_after_returning_to
     start = 3500 + ((50000 - offset) & 1)
     c.frame(start)
     c.frame(start + 2)
-    generation = c.s("generation")
+    generation = c.s("cursor")
     assert c.s("shown") >> 28 == 0xB
     c.set_overworld(False)
     for _ in range(64):
         c.frame(c.s("index") + 313)
         assert c.s("target") == 50000
-        assert c.s("generation") == generation
+        assert c.s("cursor") == generation
         assert c.s("status") == 2
     c.set_overworld()
     c.frame(c.s("index") + 2)
@@ -635,7 +640,7 @@ def test_tv_bursts_keep_a_future_target_and_report_an_overrun_after_returning_to
     c.frame(c.s("index") + 2)
     assert c.s("shown") >> 28 in (0xA, 0xB)
     assert c.s("target") > c.s("index") + offset
-    assert c.s("generation") == c.lcg.advance(c.seed, c.s("target"))
+    assert c.s("cursor") == c.lcg.advance(c.seed, c.s("target"))
     c.frame(c.s("target") - offset)
     assert c.main_loop() == 1
     assert len(c.presses) == 1
@@ -661,7 +666,7 @@ def test_visible_countdown_retries_only_after_an_actual_miss_and_hits_the_range_
     c.resume_after_notice()
     assert c.s("status") == 2
     assert c.s("target") == c.plan["range"]["last"] == 20123
-    assert c.s("generation") == c.lcg.advance(c.seed, 20123)
+    assert c.s("cursor") == c.lcg.advance(c.seed, 20123)
     assert c.s("shown") == 0xB0000002
     assert c.main_loop() == 0
     assert not c.presses
@@ -694,9 +699,9 @@ def test_repeated_misses_keep_searching_until_one_future_candidate_is_pressed(co
         assert c.s("status") == 2
         assert 20000 < c.s("target") <= 21000
         assert c.s("target") - offset > c.s("index")
-        assert c.s("generation") == c.lcg.advance(c.seed, c.s("target"))
+        assert c.s("cursor") == c.lcg.advance(c.seed, c.s("target"))
         assert c.main_loop() == 0
-    generation = c.s("generation")
+    generation = c.s("cursor")
     c.frame(c.s("target") - offset)
     assert c.main_loop() == 1
     assert c.presses[0][0] == generation
@@ -749,7 +754,7 @@ def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_s
     assert c.s("status") == 2
     assert c.s("target") > 20000
     assert c.main_loop() == 0
-    generation = c.s("generation")
+    generation = c.s("cursor")
     c.frame(c.s("target") - c.plan["auto_a_offset_advances"])
     assert c.main_loop() == 1
     assert c.s("status") == 7
@@ -820,7 +825,7 @@ def test_retry_preserves_filters_and_rebases_from_the_live_rng_after_a_large_ski
     while c.s("status") == 1 and c.s("index") < last - offset:
         c.frame(c.s("index") + 2)
     assert c.s("target") == last
-    assert c.s("generation") == c.lcg.advance(c.seed, last)
+    assert c.s("cursor") == c.lcg.advance(c.seed, last)
     c.frame(last - offset)
     assert c.main_loop() == 1
     assert len(c.presses) == 1

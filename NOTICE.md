@@ -32,6 +32,14 @@ bundle the PokeLDN host or any ROM, save, prod.keys, or private signing key.
 
 Source references:
 
+- [Ten Lines static target categories](https://github.com/lincoln-lm/ten-lines/blob/main/src/components/StaticEncounterSelector.tsx)
+  and [wild category / location selector](https://github.com/lincoln-lm/ten-lines/blob/main/src/components/WildEncounterSelector.tsx)
+  inform the selection layout. No Ten Lines program code or encounter tables are bundled.
+- Wild delay reference values and their FireRed / LeafGreen column meaning were supplied by the user;
+  unknown values default to 256 and are not hardware measurements by this project.
+- [GetMonData and encrypted-record checksum](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/pokemon.c)
+  and [MON_DATA_IVS](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/include/constants/pokemon.h).
+
 - [PokeLDN plugin API](https://github.com/Decryptu/pokeldn/blob/v0.39.1/docs/plugins.md)
 - [Native shiny-press and measured offsets](https://github.com/Decryptu/pokeldn/blob/v0.39.1/docs/frlg_rom.md)
 - [RNG and title-screen reseeding](https://github.com/Decryptu/pokeldn/blob/v0.39.1/docs/frlg_rng.md)

@@ -77,8 +77,8 @@ for key, name in (
     ("fish-super", "野生：厉害钓竿"),
     ("wild-land", "野生：碎岩（最后 A 确认）"),
 ):
-    ENCOUNTERS[key] = Encounter(name, 0, "wild", 0, 1, model="wild", menus=True,
-                               delay_source="uncalibrated",
+    ENCOUNTERS[key] = Encounter(name, 0, "wild", 0, 257, model="wild", menus=True,
+                               delay_source="wild_fallback_256",
                                decision="甜香停在队伍菜单的甜甜香气选项；钓鱼自行完成咬钩，停在最后确认；其他方式自行停在最后 A 决定点。")
 
 UNOWN_CHAMBERS = {
@@ -90,13 +90,83 @@ UNOWN_CHAMBERS = {
     "rixy": (21, 21, 21, 22, 22, 22, 23, 23, 12, 12, 1, 1),
     "viapois": (25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 25, 26),
 }
-ENCOUNTERS["unown"] = Encounter("野生：未知图腾（阿斯卡纳遗迹）", 201, "wild", 0, 1,
-                                model="unown", menus=True, delay_source="uncalibrated")
+ENCOUNTERS["unown"] = Encounter("野生：未知图腾（阿斯卡纳遗迹）", 201, "wild", 0, 257,
+                                model="unown", menus=True, delay_source="wild_fallback_256")
+
+# Category -> targets follows Ten Lines' FRLG selection order. No source code or
+# encounter tables are imported from that application.
+CATEGORIES = {
+    "starters": ("御三家", ("bulbasaur", "charmander", "squirtle")),
+    "fossils": ("化石", ("omanyte", "kabuto", "aerodactyl")),
+    "gifts": ("礼物 / 购买", ("magikarp", "eevee", "hitmonlee", "hitmonchan", "lapras", "togepi")),
+    "game-corner": ("游戏厅", ("abra", "clefairy", "scyther", "pinsir", "dratini", "porygon")),
+    "stationary": ("普通定点", ("snorlax12", "snorlax16", "hypno", "electrode")),
+    "legends": ("传说定点", ("mewtwo", "articuno", "zapdos", "moltres")),
+    "events": ("活动定点", ("deoxys", "lugia", "hooh")),
+    "roamers": ("游走初始化", ("raikou", "entei", "suicune")),
+    "wild": ("野生", ("sweet-land", "sweet-surf", "fish-old", "fish-good", "fish-super", "wild-land")),
+    "unown": ("未知图腾", ("unown",)),
+    "other": ("其他定点 / 礼物", ("custom",)),
+}
+
+# Reference delay columns are FireRed / LeafGreen, as clarified by the user.
+# None means unknown, never a measured zero. Unknown wild delays default to 256.
+WILD_OFFSETS = {
+    "viridian-forest": (250, None), "mt-moon": (263, None),
+    "diglett-cave": (263, None), "power-plant": (None, 263),
+    "pokemon-tower-3f": (259, None), "safari-zone": (256, 257),
+    "pokemon-mansion": (257, 257), "victory-road": (263, None),
+    "mt-ember": (256, 256), "icefall-cave": (263, None), "cerulean-cave": (263, None),
+    **{f"route-{number}": (256, None) for number in (1, 2, 3, 4, 24, 25, 5, 6, 11, 18)},
+}
+
+# All FRLG wild areas can be selected; unlisted reference delays use the fallback.
+WILD_LOCATIONS = (
+    ("other", "其他地点 / 未知"),
+    *((f"route-{n}", f"{n} 号道路") for n in range(1, 26)),
+    ("viridian-forest", "常青森林"), ("mt-moon", "月见山"),
+    ("diglett-cave", "地鼠洞穴"), ("power-plant", "无人发电厂"),
+    ("pokemon-tower-3f", "宝可梦塔 3F"), ("pokemon-tower-other", "宝可梦塔 4F–7F"),
+    ("safari-zone", "狩猎地带（各区）"), ("pokemon-mansion", "宝可梦屋（各层）"),
+    ("victory-road", "冠军之路（各层）"), ("mt-ember", "灯火山"),
+    ("icefall-cave", "冻瀑洞窟"), ("cerulean-cave", "华蓝洞窟"),
+    ("rock-tunnel", "岩山隧道"), ("seafoam-islands", "双子岛"),
+    ("berry-forest", "树果森林"), ("pattern-bush", "标志之林"),
+    ("lost-cave", "不归之穴"), ("kindle-road", "热气之路"),
+    ("treasure-beach", "宝物海滩"), ("cape-brink", "边缘海岬"),
+    ("bond-bridge", "索桥"), ("three-island-port", "第 3 岛码头"),
+    ("resort-gorgeous", "豪华度假区"), ("water-labyrinth", "水之迷宫"),
+    ("five-island-meadow", "第 5 岛空地"), ("memorial-pillar", "回忆之塔"),
+    ("outcast-island", "外岛"), ("green-path", "绿之步道"),
+    ("water-path", "水之步道"), ("ruin-valley", "遗迹山谷"),
+    ("trainer-tower", "训练家塔"), ("sevault-canyon", "七宝溪谷"),
+    ("tanoby-ruins", "阿斯卡纳遗迹（水面）"), ("altering-cave", "变幻洞窟"),
+    *((key, name) for key, name in (
+        ("pallet-town", "真新镇"), ("viridian-city", "常青市"), ("cerulean-city", "华蓝市"),
+        ("vermilion-city", "枯叶市"), ("celadon-city", "玉虹市"), ("fuchsia-city", "浅红市"),
+        ("cinnabar-island", "红莲镇"), ("one-island", "第 1 岛"), ("four-island", "第 4 岛"),
+        ("five-island", "第 5 岛"), ("ss-anne", "圣特安努号外侧"),
+    )),
+)
 
 
-def default_offset(target):
+def default_offset(target, game="firered", location="other"):
     encounter = ENCOUNTERS[target]
+    if encounter.model != "static":
+        value = WILD_OFFSETS.get(location, (None, None))[game == "leafgreen"]
+        return 256 if value is None else value
     return encounter.offset - BASE_PRESS_OFFSETS[encounter.profile]
+
+
+def offset_source(target, game="firered", location="other"):
+    if ENCOUNTERS[target].model == "static":
+        return ENCOUNTERS[target].delay_source
+    return ("reference_uncalibrated" if WILD_OFFSETS.get(location, (None, None))[game == "leafgreen"]
+            is not None else "wild_fallback_256")
+
+
+def allowed_methods(target):
+    return (1, 4) if ENCOUNTERS[target].model == "static" else (1, 2, 4)
 
 
 def offset_flag(target):

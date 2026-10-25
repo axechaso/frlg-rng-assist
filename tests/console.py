@@ -23,11 +23,11 @@ BUFFER = 0x0201C000
 PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
-STATES = (
-    "initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status", "reason", "locked",
-    "notice",
-    "call_slot", "call_original", "call_context", "work_cursor", "work_nature", "work_active",
-)
+STATES = ("initial", "seed", "index", "cursor", "next", "target", "shown",
+          "call_slot", "call_original", "call_context", "work_cursor")
+STATE_BYTES = ("status", "reason", "notice", "work_active")
+# Pinned host address facts, independently of the config word under test.
+MON_DATA = {"BPRE": 0x08043390, "BPGE": 0x08043390, "BPRF": 0x080432E4, "BPGF": 0x080432E4}
 
 
 class Console:
@@ -80,6 +80,7 @@ class Console:
         self.uc.mem_write(self.profile["original"] & ~1, bytes.fromhex("7047"))
         self.uc.mem_write(self.profile["cb1"] & ~1, bytes.fromhex("7047"))
         self.uc.mem_write(self.profile["cb2"] & ~1, bytes.fromhex("7047"))
+        self.uc.mem_write(MON_DATA[code], bytes.fromhex("7047"))
         self.uc.mem_write(0x0807C418, bytes.fromhex("7047"))
         self.uc.mem_write(self.profile["battle_cb2"] & ~1, bytes.fromhex("7047"))
         self.write(0x04000208, 1, 2)
@@ -92,6 +93,7 @@ class Console:
         self.input_keys = []
         self.input_addresses = (self.profile["cb1"] & ~1, 0x0807C418)
         self.phases = []
+        self.mon_reads = []
         self.writes = []
         self.instructions = 0
         self.record = True
@@ -107,8 +109,25 @@ class Console:
     def _code(self, uc, address, size, user):
         self.instructions += 1
         if address == self.profile["original"] & ~1:
+            # VBlankIntr transfers gMain.oamBuffer before our overlay updates.
+            uc.mem_write(0x07000000, bytes(uc.mem_read(self.profile["main"] + 0x38, 1024)))
             self.write(self.profile["rng"], self.lcg.step(self.read(self.profile["rng"])))
             self.phases.append(("vblank", self.read(self.profile["rng"])))
+        if address == MON_DATA[self.code]:
+            # Substitute the ROM accessor, not an entire ROM execution. Reproduce
+            # its XOR, block selection and checksum side effect on the argument.
+            at = uc.reg_read(a.UC_ARM_REG_R0)
+            assert uc.reg_read(a.UC_ARM_REG_R1) == 66
+            self.mon_reads.append(at)
+            raw = bytes(uc.mem_read(at, 100))
+            pid, otid = self.read(at), self.read(at + 4)
+            words = [self.read(at + off) ^ pid ^ otid for off in range(32, 80, 4)]
+            checksum = sum((word & 65535) + (word >> 16) for word in words) & 65535
+            bad = bool(raw[19] & 1 or checksum != self.read(at + 28, 2))
+            if bad:
+                uc.mem_write(at + 19, bytes((raw[19] | 1,)))
+            misc = (3, 2, 3, 2, 1, 1) * 3 + (0,) * 6
+            uc.reg_write(a.UC_ARM_REG_R0, 0 if bad else words[misc[pid % 24] * 3 + 1] & 0x3FFFFFFF)
         if (address in self.input_addresses
                 and self.read(self.profile["main"] + 0x2E, 2) & self.plan["trigger_key_mask"]):
             self.inputs.append((address, self.read(self.profile["rng"])))
@@ -136,10 +155,12 @@ class Console:
         self.uc.mem_write(at, int(value).to_bytes(size, "little"))
 
     def s(self, name, value=None):
-        at = self.manifest["symbols"]["state"] + STATES.index(name) * 4
+        base = self.manifest["symbols"]["state"]
+        at, size = ((base + STATE_BYTES.index(name), 1) if name in STATE_BYTES
+                    else (base + 4 + STATES.index(name) * 4, 4))
         if value is not None:
-            self.write(at, value)
-        return self.read(at)
+            self.write(at, value, size)
+        return self.read(at, size)
 
     def call(self, entry, *args):
         for register, value in zip((a.UC_ARM_REG_R0, a.UC_ARM_REG_R1, a.UC_ARM_REG_R2), args):

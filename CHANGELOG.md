@@ -1,5 +1,13 @@
 # Changes
 
+## 0.5.0 — 2026-10-25
+
+- Replace the flat target list with Ten Lines-style categories and separate target / wild method / location selection. Stationary and gift configurations expose and accept only Method 1 / 4; wild configurations retain H1 / H2 / H4.
+- Apply reference wild Offsets by FireRed / LeafGreen column. Add all supplied areas, including Viridian Forest 250 / unknown, Power Plant unknown / 263, Safari Zone 256 / 257 and Mansion 257 / 257. Unknown wild entries use 256. Preset values appear alongside the target / location; a blank manual Offset uses that preset, and explicit zero overrides it.
+- Hold R for live tail IVs and Hidden Power type / power. Keep L for initial seed / advances and L+R for PID. Call the game's checksum-aware accessor on a stack copy, preserving the live party. Display two decimal pairs per stat; keep countdown and one-shot input running, and preserve hidden miss notices.
+- Keep only two registered tools: live search / timed input, and manual initial-seed + PID lookup of actual hit advances. Recover wild rejection prefixes as well as stationary PID states, list ambiguity, and optionally calculate Offset correction against a planned advance. Predicted IVs are labeled as predictions.
+- Patch the final eight hardware OAM slots after the original VBlank copy, preserving the game's OAM buffer. Compact the resident to 2192 / 2200 bytes without expanding the verified RAM reservation. Software checks do not replace physical-console acceptance.
+
 ## 0.4.0 — 2026-10-25
 
 - Expand presets to stationary encounters, gifts, fossils, Game Corner, roamer initialization, Sweet Scent, all three fishing rods, Rock Smash and Tanoby Unown. Keep the player's workflow: reach the decision point, search and count down, then inject one input. Ho-Oh uses UP, including heldKeys for movement; other targets use A. No position, object, script-wait or held-B gate remains.
