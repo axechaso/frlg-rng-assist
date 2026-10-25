@@ -6,6 +6,8 @@ from frlg_rng_assist_core.encounters import (
     CATEGORIES, ENCOUNTERS, UNOWN_CHAMBERS, WILD_LOCATIONS, default_offset,
 )
 from frlg_rng_assist_core.selection import method_flag, target_flag
+from frlg_rng_assist_core.i18n import host_language, localized_tool
+from frlg_rng_assist_core.wild_tables import names, tables
 
 
 def selection_fields():
@@ -31,6 +33,11 @@ def selection_fields():
                              f"{default_offset('sweet-land', 'leafgreen', key)}")
                             for key, name in WILD_LOCATIONS),
               help="斜杠左侧火红、右侧叶绿。选定后自动使用对应游戏的值；未知为 256。"),
+        Field("--species", "野生宝可梦", "choice", default="0", when=("--category", "wild"),
+              choices=(("0", "不限"),) + tuple((str(n), names()["zh"][n]) for n in sorted(
+                  {mon[0] for row in tables().values() for game in ("firered", "leafgreen")
+                   for mons in row[game].values() for mon in mons if mon[0] != 201})),
+              help="筛选物种时须选择具体楼层 / 区域及正确游戏、遭遇方式；不在该表中的物种会在安装前提示。"),
         Field("--chamber", "未知图腾房间", "choice", default="monean",
               when=("--category", "unown"), choices=tuple((key, key.title()) for key in UNOWN_CHAMBERS)),
     ))
@@ -51,8 +58,13 @@ def selection_fields():
 
 
 def register(api):
+    language = host_language()
+
+    def add_tool(game, tool):
+        api.add_tool(game, localized_tool(tool, language))
+
     selection = selection_fields()
-    api.add_tool("frlg", Tool(
+    add_tool("frlg", Tool(
         "frlg-rng-assist-install", "RNG：搜索与到点按键", "install.py",
         "从实际初始 seed 搜索范围和个体条件，到点按一次键：凤王 ↑，其他目标 A。",
         (
@@ -71,7 +83,8 @@ def register(api):
                   help="从本次标题重新播种的实际初始 seed 起算，初始 seed 为 0。"),
             Field("--end", "结束 advance（含）", "number", default="200000", bounds=(0, 9999999),
                   help="定点为首次 PID 抽取前，野生为遭遇槽位抽取前。"),
-            Field("--nature", "性格（留空不限）", help="中文、英文或 0..24。"),
+            Field("--nature", "性格（留空不限）", "choice",
+                  choices=(("", "不限"),) + tuple((str(i), name) for i, name in enumerate(names()["natures"]["zh"]))),
             Field("--iv-min", "IV 下限", default="0,0,0,0,0,0", help="HP,攻击,防御,特攻,特防,速度。"),
             Field("--iv-max", "IV 上限", default="31,31,31,31,31,31", help="HP,攻击,防御,特攻,特防,速度。"),
             Field("--allow-normal", "允许非闪光（首轮按键测试可打开）", "switch", default=False),
@@ -83,7 +96,7 @@ def register(api):
             Field("--output", "报告保存路径", hidden=True),
         ),
     ))
-    api.add_tool("frlg", Tool(
+    add_tool("frlg", Tool(
         "frlg-rng-assist-lookup", "RNG：PID 反查实际命中", "lookup.py",
         "输入本轮初始 seed 和队尾实际 PID，反查范围内的命中 advance；可对照目标计算 Offset 修正。",
         (

@@ -21,6 +21,7 @@ def selection_arguments(parser):
                             choices=(1, 2, 4) if category in ("wild", "unown") else (1, 4),
                             default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     parser.add_argument("--location", choices=dict(WILD_LOCATIONS), default="other")
+    parser.add_argument("--species", type=int, default=0)
     parser.add_argument("--chamber", choices=UNOWN_CHAMBERS, default="monean")
 
 

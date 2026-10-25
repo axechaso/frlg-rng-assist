@@ -25,6 +25,12 @@ def ivs(text):
 
 
 def nature(text):
+    from .wild_tables import names
+
+    for language in ("zh", "ja", "en"):
+        for index, name in enumerate(names()["natures"][language]):
+            if text.casefold() == name.casefold():
+                return index
     for index, name in enumerate(NATURES):
         if text.casefold() == name.casefold() or text == NATURES_ZH[index]:
             return index
@@ -38,6 +44,7 @@ def nature(text):
 
 
 def output_arguments(parser):
+    parser.add_argument("--ui-language", choices=("zh", "en", "ja"), default="zh", help=argparse.SUPPRESS)
     parser.add_argument("--output", help="新建 JSON 报告；默认保存到插件资料库")
     parser.add_argument("--json", action="store_true", help="以 JSON 输出报告")
 

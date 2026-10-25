@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from .wild_tables import offset_region, selectable_locations
+
 
 @dataclass(frozen=True)
 class Encounter:
@@ -121,7 +123,7 @@ WILD_OFFSETS = {
 }
 
 # All FRLG wild areas can be selected; unlisted reference delays use the fallback.
-WILD_LOCATIONS = (
+LEGACY_WILD_LOCATIONS = (
     ("other", "其他地点 / 未知"),
     *((f"route-{n}", f"{n} 号道路") for n in range(1, 26)),
     ("viridian-forest", "常青森林"), ("mt-moon", "月见山"),
@@ -149,11 +151,13 @@ WILD_LOCATIONS = (
     )),
 )
 
+WILD_LOCATIONS = selectable_locations(LEGACY_WILD_LOCATIONS)
+
 
 def default_offset(target, game="firered", location="other"):
     encounter = ENCOUNTERS[target]
     if encounter.model != "static":
-        value = WILD_OFFSETS.get(location, (None, None))[game == "leafgreen"]
+        value = WILD_OFFSETS.get(offset_region(location), (None, None))[game == "leafgreen"]
         return 256 if value is None else value
     return encounter.offset - BASE_PRESS_OFFSETS[encounter.profile]
 
@@ -161,7 +165,7 @@ def default_offset(target, game="firered", location="other"):
 def offset_source(target, game="firered", location="other"):
     if ENCOUNTERS[target].model == "static":
         return ENCOUNTERS[target].delay_source
-    return ("reference_uncalibrated" if WILD_OFFSETS.get(location, (None, None))[game == "leafgreen"]
+    return ("reference_uncalibrated" if WILD_OFFSETS.get(offset_region(location), (None, None))[game == "leafgreen"]
             is not None else "wild_fallback_256")
 
 

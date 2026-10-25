@@ -1,4 +1,18 @@
-# 0.5.0 validation record
+# 0.6.0 validation record
+
+Date: 2026-10-25. **971 pytest cases passed in 124.73 s; Ruff and GCC 15.2.1 guest reproduction passed. Physical-console acceptance remains pending.**
+
+The 64 new checks cover 132 committed versioned encounter tables; national-dex / name integrity; independent Route 1, forest, Diglett, Safari and rod-slot boundaries; game-exclusive refusal; exact-area requirements; Unown's separate model; and rejection before any gift / report is written. Real compiled ARM code tests all 100 percentile rolls on all four builds and H1/H2/H4. Species, shiny, nature and all six exact IV bounds are combined, then individually failed. Manual PID recovery uses the same species mask and reports the predicted species; selecting another valid species excludes the same start. These are synthetic-memory tests with substituted callbacks, not execution of a retail game ROM.
+
+Translated catalogs use the actual pinned host's form validation and command builder in Chinese, Japanese and English, independently of trainer / ROM language. Tests check stable values and flags, required manual PID fields, all translated English catalog text, placeholder parity, every nature name in all three languages, localized PID / preview / IV-error output, and byte-identical generated gifts across display languages. The optional non-private host `i18n.locale()` helper is verified against v0.39.1; it is not part of the guaranteed API table and its absence falls back to English. A language change requires reloading the plugin by restarting the host.
+
+The resident now occupies **2200 / 2200 bytes** in the unchanged 0x0203F768..0x02040000 reservation. Its configuration carries the selected species as a 100-bit percentile mask (13 bytes), checked before nature / PID rejection. The existing Unown letter list shares that field. Inlining the stack-copy IV accessor keeps the guest within its reservation; prior party-read bounds, decrypted-block permutations, overlay pixels, retry / countdown, one-shot input and protected-store tests all remain in the full passing run. No extra live RNG draw or map / player gate is introduced.
+
+The official frozen PokeLDN v0.39.1 Windows executable read and installed the 38-file 0.6.0 package in isolated data with Python module fallback disabled. Its loader confirmed version / API, source and guest hashes, RAM bounds, both JSON resources and the bundled resource license; `--module pokeldn --plugins` reported the plugin loaded. The installed files passed actual-host form checks for all categories / methods / locations, three-language species + nature + IV previews with identical gifts, manual PID lookup, and six real offline gift exports including Pikachu, Super Rod Dratini and LeafGreen surf Slowpoke. Corrected runs exited 0 with empty stderr; evidence is in ignored `dist/packed-060-*.log`. An initial test configured POKELDN_PLUGINS as the parent directory instead of the plugin directory, so it did not load; correcting that isolated test configuration resolved it. These checks do not establish native GUI rendering, radio connection, game-ROM execution or physical timing.
+
+The following records describe older versions. In particular, 0.5.0's lack of species selection is superseded here; its timing and live party display limitations still apply.
+
+## 0.5.0 validation record
 
 Date: 2026-10-25. **907 pytest cases passed in 104.96 s; Ruff, guest reproduction and offline frozen-host checks passed. Physical-console acceptance remains pending.**
 

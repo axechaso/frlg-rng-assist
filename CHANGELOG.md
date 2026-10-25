@@ -1,5 +1,12 @@
 # Changes
 
+## 0.6.0 — 2026-10-25
+
+- Add wild species selection using 132 versioned FRLG encounter tables, exact floors / zones, surf / Rock Smash and individual rod slots. Encode the selected species' 100 percentile-roll buckets for filtering in the compiled resident before PID rejection. Invalid game / location / type combinations fail before gift creation; Any preserves previous behavior. Unown keeps its separate letter model.
+- Combine species with existing shiny, nature and all six IV minimum / maximum conditions. Manual PID lookup uses the same table and reports predicted species. No automatic map detection or roamer-override simulation is added.
+- Localize both tools' forms, names, steps, choices and normal output in Chinese, Japanese and English using the host display locale. Preserve stable command values and pass the display locale to subprocesses independently of trainer language. Unsupported locales use English; reload the plugin by restarting after a language change.
+- Include attributed reproducible encounter / name snapshots. Keep the existing 2200-byte RAM reservation; the guest now uses all 2200 bytes. Hardware timing remains pending physical validation.
+
 ## 0.5.0 — 2026-10-25
 
 - Replace the flat target list with Ten Lines-style categories and separate target / wild method / location selection. Stationary and gift configurations expose and accept only Method 1 / 4; wild configurations retain H1 / H2 / H4.

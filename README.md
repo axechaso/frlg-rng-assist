@@ -1,4 +1,4 @@
-# FRLG RNG Assist 0.5.0
+# FRLG RNG Assist 0.6.0
 
 PokeLDN 独立第三方插件。设置 RNG advances 范围和条件，掌机显示 seed / 倒计时，到点触发一次按键。你自行到最后决定点；**凤王按 ↑，其余目标按 A**，无需按住 B。
 
@@ -6,7 +6,9 @@ PokeLDN 独立第三方插件。设置 RNG advances 范围和条件，掌机显�
 
 ## 安装与界面
 
-使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.5.0.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
+使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.6.0.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
+
+工具名称、说明、分类、地点、物种、性格和输出支持**中文 / 日本語 / English**，跟随 PokeLDN 的 App language。更改宿主语言后重启 PokeLDN 重新载入插件；其他界面语言回退到英文。中文 / 日文宿主需要对应的 PokeLDN 语言包。这是界面翻译，游戏支持范围仍为上述英文 / 法文构建。安装卡片的简介为三语共用文本。
 
 Games → FireRed & LeafGreen 下只保留两个工具：
 
@@ -49,7 +51,15 @@ Games → FireRed & LeafGreen 下只保留两个工具：
 
 参考表由用户提供，尚未在每种触发方式、语言和场景实测，也没有把参考画面帧数当成已经测得的 advances。若实际命中比原目标晚 3 advances，应将当前额外 Offset 加 3；早 3 则减 3。第二个工具可给出这一修正建议，需多次实测确认。
 
-搜索范围含端点，最大 9999999。定点索引为首次 PID 抽取前；野生索引为遭遇槽位抽取前，后续包含等级、性格和 PID 重抽。野生目前筛选闪光、性格和 IV，不筛物种或槽位；已初始化游走宝可梦的再次遭遇不属于重新生成。固定 PID 交换和普通遗传蛋不属于这里的随机模型。
+搜索范围含端点，最大 9999999。定点索引为首次 PID 抽取前；野生索引为遭遇槽位抽取前，后续包含等级、性格和 PID 重抽。已初始化游走宝可梦的再次遭遇不属于重新生成。固定 PID 交换和普通遗传蛋不属于这里的随机模型。
+
+## 野生物种与 IV 筛选
+
+选择**游戏 → 野生 → 遭遇方式 → 具体地点 / 楼层 → 野生宝可梦**。物种默认为「不限」，保留原有流程。数据包含 132 组火红 / 叶绿遭遇表，区分草地 / 洞窟、水面、碎岩以及三种钓竿；楼层、狩猎区和版本限定种分别计算。例：常青森林选皮卡丘，掌机只接受该表的皮卡丘槽位；发电厂电击兽只属于火红。
+
+物种下拉是所有已收录野生物种的共用列表，不随其他字段动态缩短。选择后在安装前核对游戏、地点和遭遇方式；不存在的组合会报错。筛物种时不能使用「其他 / 未知」或合并楼层，需选择具体楼层 / 区域。不筛物种时仍可使用原来的粗略地点和 Offset。变幻洞窟的事件表需与实际游戏状态一致；未知图腾使用独立类别及房间，不能套普通性格重抽模型。该筛选不读取掌机当前地图，也不处理游走宝可梦替代普通甜香遭遇的情况。
+
+**六项 IV 的上下限已在掌机搜索中实际生效**，可与物种、性格和闪光同时筛选。输入顺序为 HP、攻击、防御、特攻、特防、速度；例如特攻至少 25、速度至少 25，可将下限设为 `0,0,0,25,0,25`，上限保持 `31,31,31,31,31,31`。精确 0 速度则将速度上下限都填 0。条件越严，范围内越可能没有结果；它不会修改宝可梦数据或保证命中。首测先允许非闪光、IV 不限，核对物种及 Offset，再逐步加条件。
 
 ## 掌机显示与按键
 
@@ -96,8 +106,10 @@ D 原因码：04 回调不可用或改变；09 越过按键时机；10 主循环
     python -m ruff check .
     python -m pytest -q
     python scripts/build_guest.py --check
-    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.5.0.pokeplugin
+    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.6.0.pokeplugin
 
-重新编译时设置 ARM_TOOLCHAIN 为带末尾分隔符的 ARM 工具目录，运行 scripts/build_guest.py。驻留区仍为 2200 字节，本版占用 2192；不能叠加其他 resident hooks。插件不写 RNG、宝可梦、存档或 ROM；游戏的解密访问器只接收栈副本。
+重新编译时设置 ARM_TOOLCHAIN 为带末尾分隔符的 ARM 工具目录，运行 scripts/build_guest.py。驻留区仍为 2200 字节，本版占用 2200；不能叠加其他 resident hooks。物种条件编码为 100 个槽位随机数的位图，在既有配置中传入，不增大保留区。插件不写 RNG、宝可梦、存档或 ROM；游戏的解密访问器只接收栈副本。
+
+更新静态遭遇数据时，运行 `python scripts/import_wild_data.py --decomp PATH --pokefinder PATH`。已提交的数据记录来源 commit，用户无需安装这些开发依赖。物种 / 性格译名来源和许可证见 NOTICE。
 
 报告保存在 PokeLDN 的 FRLG RNG Assist 资料库，已有文件不会覆盖。AGPL-3.0-or-later，来源见 [NOTICE](NOTICE.md)。PokeLDN 原作者不负责审核或支持本插件。

@@ -3,6 +3,7 @@
 from .backend import backend, bounded, predict
 from .encounters import ENCOUNTERS, UNOWN_CHAMBERS, allowed_methods, default_offset
 from .wild import predict_wild, slot_from, unown_letter
+from .wild_tables import area_for, predicted_species, species_mask
 
 
 HP_TYPES = ("格斗", "飞行", "毒", "地面", "岩石", "虫", "幽灵", "钢",
@@ -63,7 +64,7 @@ def wild_starts(pid, pid_seed, model, chamber):
 
 
 def lookup(initial_seed, pid, target, *, first=0, last=9999999, method=1, chamber="monean",
-           game="firered", location="other", target_advance=None, offset=None):
+           game="firered", location="other", target_advance=None, offset=None, species=0):
     bounded(initial_seed, 0, 0xFFFF, "初始 seed")
     bounded(pid, 0, 0xFFFFFFFF, "PID")
     bounded(first, 0, 9999999, "范围起点")
@@ -78,14 +79,20 @@ def lookup(initial_seed, pid, target, *, first=0, last=9999999, method=1, chambe
         bounded(target_advance, 0, 9999999, "原目标 advance")
     extra = default_offset(target, game, location) if offset is None else bounded(offset, 0, 65533, "Offset")
     model = ENCOUNTERS[target].model
+    if species and model != "wild":
+        raise ValueError("物种筛选只用于普通野生遭遇。")
+    mask = int.from_bytes(species_mask(target, game, location, species), "little")
+    lcg, _ = backend()
     encoded = pid if model != "unown" else (pid >> 16) | ((pid & 0xFFFF) << 16)
     candidates = {}
-    area = {"sweet-surf": "surf", "fish-old": "old", "fish-good": "good", "fish-super": "super"}.get(target, "land")
+    area = area_for(target)
     for pid_seed in pid_states(encoded):
         starts = (pid_seed,) if model == "static" else wild_starts(pid, pid_seed, model, chamber)
         for start in starts:
             advance = distance(initial_seed, start)
             if not first <= advance <= last:
+                continue
+            if model == "wild" and not (mask >> ((lcg.step(start) >> 16) % 100)) & 1:
                 continue
             mon = (predict(start, 0, 0, method) if model == "static" else
                    predict_wild(start, 0, 0, method, model=model, area=area, chamber=chamber))
@@ -97,6 +104,8 @@ def lookup(initial_seed, pid, target, *, first=0, last=9999999, method=1, chambe
             if model != "static":
                 result.update(pid_advance=distance(initial_seed, pid_seed),
                               encounter_slot=mon["encounter_slot"], rerolls=mon["rerolls"])
+                result["predicted_species"] = (201 if model == "unown" else
+                                               predicted_species(target, game, location, mon["encounter_slot"]))
             if target_advance is not None:
                 error = advance - target_advance
                 suggested = extra + error
@@ -106,6 +115,7 @@ def lookup(initial_seed, pid, target, *, first=0, last=9999999, method=1, chambe
     return {"kind": "pid_lookup", "initial_seed": initial_seed, "actual_pid": pid,
             "target": target, "target_name": ENCOUNTERS[target].name, "model": model,
             "game": game, "location": location, "method": method,
+            "wild_species": species or None,
             "range": {"first": first, "last": last, "inclusive": True},
             "result": "unique" if len(candidates) == 1 else "ambiguous" if candidates else "no_match",
             "candidates": [candidates[key] for key in sorted(candidates)],

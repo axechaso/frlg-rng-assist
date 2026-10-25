@@ -14,7 +14,7 @@ struct Config {
     u32 main, rng, sb2ptr, cb1, cb2, original, seed_getter, palette, party, party_count, battle_cb2, mon_data;
     u32 first, last, jump_a, jump_c, offset_a, offset_c;
     u16 offset;
-    u8 model, method, shiny, nature, menus, button, minimum[6], maximum[6], letters[12];
+    u8 model, method, shiny, nature, menus, button, minimum[6], maximum[6], letters[13];
 };
 __attribute__((section(".config"), used)) struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
@@ -95,15 +95,18 @@ __attribute__((noinline)) int matches(u32 seed) {
         if (!S.work_active) {
             a = step(seed);
             u32 n = a >> 16;
+            n -= ((n * 5242) >> 19) * 100;
+            while (n >= 100) n -= 100;
             if (C.model == 2) {
-                n -= ((n * 5242) >> 19) * 100;
-                while (n >= 100) n -= 100;
                 static const u8 ends[11] = {20, 40, 50, 60, 70, 80, 85, 90, 94, 98, 99};
                 u32 slot = 0;
                 while (slot < 11 && n >= ends[slot]) ++slot;
                 S.work_active = C.letters[slot] + 1;
                 a = step(a);
             } else {
+                /* Host encodes the species' allowed slot rolls for this table.
+                 * Check before nature / PID rejection; never advance live RNG. */
+                if (!(C.letters[n >> 3] & (1 << (n & 7)))) return 0;
                 a = step(step(a)); /* slot, level, nature; no Synchronize in FRLG */
                 u32 wanted = nature_of(a >> 16, 0);
                 if (C.nature != 255 && wanted != C.nature) return 0;
@@ -164,7 +167,7 @@ static u32 bcd(u32 n) {
 /* GetMonData(MON_DATA_IVS=66) checks the encrypted record and its checksum.
  * Run it on a stack copy: the game's accessor decrypts / re-encrypts its input
  * and marks bad checksums, so passing the live party would write to it. */
-static void party_values(u32 *values, u32 keys) {
+__attribute__((always_inline)) static inline void party_values(u32 *values, u32 keys) {
     u32 count = U8(C.party_count);
     values[0] = 0xFFFFFFFF;
     values[1] = keys & 0x200 ? 0 : 0xFFFFFFFF;

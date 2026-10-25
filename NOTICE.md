@@ -29,6 +29,21 @@ its coordinate-event script, and field_control_avatar.c's held-key handling.
 
 This plugin uses documented API 1.11 and the public catalog launcher; it does not
 bundle the PokeLDN host or any ROM, save, prod.keys, or private signing key.
+Display-language selection additionally uses the non-private `i18n.locale()`
+helper verified in v0.39.1; that helper is not in the guaranteed API table, so
+its absence falls back to English without blocking either RNG tool.
+
+Version 0.6.0's `data/wild_tables.json` is a national-dex-indexed conversion of
+pret/pokefirered's `src/data/wild_encounters.json` at
+`c75f352304d529f6ba92d4f74b9cf8b5c3810788`, with plugin-authored location labels.
+`data/names.json` contains the first 386 species names and 25 nature names in
+English, Japanese and Chinese from Admiral-Fish/PokeFinder's
+`Source/Core/Resources/i18n` at `fddaee74e6e3a2cfebc59c7624ffca2f6d1c6b4b`,
+copyright its contributors, under GPL-3.0. Its license is included in
+`licenses/PokeFinder-GPL-3.0.txt`. The generator is `scripts/import_wild_data.py`;
+the source commits are also embedded in the JSON snapshots. No Ten Lines
+program code or encounter table is copied; the PokeFinder resource snapshot is
+separately attributed here.
 
 Source references:
 

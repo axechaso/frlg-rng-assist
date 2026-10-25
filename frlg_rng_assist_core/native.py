@@ -8,6 +8,7 @@ import struct
 
 from .backend import backend, bounded
 from .model import Criteria
+from .wild_tables import species_mask
 from .encounters import (
     BASE_PRESS_OFFSETS, ENCOUNTERS, UNOWN_CHAMBERS, WILD_LOCATIONS, allowed_methods,
     default_offset, offset_source,
@@ -89,7 +90,7 @@ def validate_context(game, build, target):
 
 
 def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None,
-                 method=1, chamber="monean", location="other"):
+                 method=1, chamber="monean", location="other", species=0):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -98,6 +99,9 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
     if criteria.pid is not None:
         raise ValueError("实机搜索仅支持闪光、性格及 IV 条件；精确 PID 请使用离线搜索")
     encounter = ENCOUNTERS[target]
+    if species and encounter.model != "wild":
+        raise ValueError("物种筛选只用于普通野生遭遇。")
+    mask = species_mask(target, game, location, species)
     base_offset = BASE_PRESS_OFFSETS[encounter.profile]
     if location not in dict(WILD_LOCATIONS):
         raise ValueError("野生地点无效")
@@ -125,6 +129,8 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         "criteria": asdict(criteria),
         "method": method,
         "model": encounter.model,
+        "wild_species": species or None,
+        "slot_roll_mask": mask.hex(),
         "location": location if encounter.model != "static" else None,
         "chamber": chamber if encounter.model == "unown" else None,
         "offset_source": (offset_source(target, game, location)
@@ -161,7 +167,7 @@ def resident(plan, code):
     offset_a = (lcg.advance(1, advance) - offset_c) & 0xFFFFFFFF
     order = (0, 1, 2, 5, 3, 4)  # Random's IV fields: HP, ATK, DEF, SPE, SPA, SPD.
     settings = struct.pack(
-        "<18IH30B",
+        "<18IH31B",
         *(profile[name] for name in CONFIG_WORDS),
         first,
         plan["range"]["last"],
@@ -178,7 +184,8 @@ def resident(plan, code):
         encounter.button,
         *(criteria["iv_min"][i] for i in order),
         *(criteria["iv_max"][i] for i in order),
-        *UNOWN_CHAMBERS[plan["chamber"] or "monean"],
+        *(UNOWN_CHAMBERS[plan["chamber"]] + (0,) if encounter.model == "unown"
+          else bytes.fromhex(plan["slot_roll_mask"])),
     )
     at = manifest["symbols"]["config"] - manifest["base"]
     blob[at : at + len(settings)] = settings

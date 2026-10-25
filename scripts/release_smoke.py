@@ -60,6 +60,38 @@ def check_catalog_offsets(installer, plugin_root):
     assert install_plan(parsed.game, parsed.build, parsed.target, offset=parsed.offset)["offset_advances"] == 3
 
 
+def check_localized_species_forms(plugin, plugin_root, work):
+    from pokeldn.app import command, i18n
+    from install import build_parser, main as install_main
+
+    settings = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
+                               ids=lambda game: (12345, 2791), name=lambda game: "TEST")
+    original = i18n.locale
+    gifts = []
+    try:
+        for language in ("zh", "en", "ja"):
+            i18n.locale = lambda: language
+            tools = []
+            plugin.register(SimpleNamespace(add_tool=lambda game, tool: tools.append(tool)))
+            assert len(tools) == 2
+            tool = replace(tools[0], script=str(plugin_root / "install.py"))
+            values = {"--category": "wild", "--target-wild": "sweet-land", "--location": "viridian-forest",
+                      "--species": "25", "--nature": "15", "--iv-min": "20,0,0,0,0,20", "--preview": True,
+                      "--output": str(work / f"localized-{language}.json")}
+            assert not command.problems(tool, values)
+            argv = command.build(tool, values, {}, settings)
+            parsed = normalize_selection(build_parser().parse_args(argv))
+            assert (parsed.ui_language, parsed.species, parsed.nature) == (language, 25, 15)
+            assert parsed.iv_min == (20, 0, 0, 0, 0, 20)
+            assert install_main(argv) == 0
+            result = json.loads(Path(values["--output"]).read_text(encoding="utf-8"))
+            assert result["wild_species"] == 25
+            gifts.append(Path(result["gift"]["path"]).read_bytes())
+        assert gifts[0] == gifts[1] == gifts[2]
+    finally:
+        i18n.locale = original
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work", required=True)
@@ -89,6 +121,7 @@ def main():
     check_catalog_offsets(installer, plugin_root)
     work = Path(args.work).resolve()
     work.mkdir(exist_ok=True)
+    check_localized_species_forms(plugin, plugin_root, work)
     # Exercise the second tool through the real form parser as a manual, offline
     # operation. No radio or IV input is accepted / needed for PID lookup.
     from pokeldn.app import command
@@ -117,13 +150,18 @@ def main():
     mon = predict(seed, 12345, 2791)
     assert {"generation_seed": seed, "method": 1} in recover(mon["personality"], mon["ivs"])
     results = []
-    for game, target in (("firered", "mewtwo"), ("leafgreen", "articuno"),
-                         ("firered", "deoxys"), ("leafgreen", "sweet-land"), ("firered", "fish-super")):
+    for game, target, location, species in (
+        ("firered", "mewtwo", "other", 0), ("leafgreen", "articuno", "other", 0),
+        ("firered", "deoxys", "other", 0), ("leafgreen", "sweet-land", "viridian-forest", 25),
+        ("firered", "fish-super", "safari-zone-center", 147),
+        ("leafgreen", "sweet-surf", "safari-zone-center", 79),
+    ):
         plan = install_plan(
             game, "auto", target, criteria=Criteria(shiny=False),
             offset=3 if target == "articuno" else None,
+            location=location, species=species,
         )
-        assert plan["offset_advances"] == default_offset(target)
+        assert plan["offset_advances"] == default_offset(target, game, location)
         gift = work / f"{game}-{target}.pokegift"
         exported = work / f"{game}-{target}-host-export.pokegift"
         info = write_gift(plan, gift)

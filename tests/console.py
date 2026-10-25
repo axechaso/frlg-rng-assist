@@ -44,6 +44,8 @@ class Console:
         offset=None,
         method=1,
         chamber="monean",
+        location="other",
+        species=0,
     ):
         self.code, self.profile, self.manifest = code, PROFILES[code], guest()
         self.plan = install_plan(
@@ -56,6 +58,8 @@ class Console:
             offset=offset,
             method=method,
             chamber=chamber,
+            location=location,
+            species=species,
         )
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
         for base, size in (
