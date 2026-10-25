@@ -1,4 +1,4 @@
-# FRLG RNG Assist 0.3.3
+# FRLG RNG Assist 0.3.4
 
 PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时掌机程序，显示 seed / 倒计时，到点自动按一次 A。**这是待实机验证的测试版。软件模拟通过不代表掌机时序已经通过。**
 
@@ -6,10 +6,12 @@ PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时�
 
 **三鸟到点直接按一次 A，无需按住 B，也不检测相邻、朝向、移动、目标对象或脚本状态。**你提前走到要按 A 的位置，松开按键等待即可。旧版的持续按 B 门槛不符合这个流程，已在 0.3.3 移除；此前的初始 seed 地址修复和时序错误码保留，详见 [修改记录](CHANGELOG.md)。
 
+0.3.4 修复接近归零时 B 突然退回 A 搜索：初始候选确认在 A 阶段完成，B 出现后固定目标，不再根据单轮推进量推测它不可达并提前丢弃。真实越过按键时机才显示 `D0000009`；不会为了按 A 而改 RNG 或补按已错过的时刻。
+
 ## 安装与支持范围
 
 - 使用 PokeLDN **v0.39.1 / 插件 API 1.11**。开发检查固定在该版本。
-- 安装 `frlg-rng-assist-0.3.3.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
+- 安装 `frlg-rng-assist-0.3.4.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
 - Games → FireRed & LeafGreen → **RNG：搜索与到点自动 A**。
 - 本版只接受 Switch 火红 / 叶绿英文、法文 **rev 0A**：BPRE、BPGE、BPRF、BPGF。原版 GBA 卡带的 rev 0/1、其他语言或改版 ROM 不在本版范围内。
 - ESP32 的 Wireless 固件版本与插件 API 是两回事；无需为了这个插件更换已经能正常运行 PokeLDN 的 Wireless 1.8.0。
@@ -20,7 +22,7 @@ PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时�
 1. PC 导出范围、目标、闪光 / 性格 / IV 条件，使用 PokeLDN 的公开 Mystery Gift 工具传输。未完整传完、校验失败或已有 resident hook 时不启用。
 2. 离开 Mystery Gift 回到标题。标题按 START 后，游戏用计时器重新播种；插件读取游戏保留的**这个实际初始 seed**。Mystery Gift 会话中的 seed 不用于地图计数。
 3. 以实际初始 seed 为 advance 0，读取当前 RNG 状态并算出绝对 advances。因此进入地图时一般已经不是 0。PC 配置的范围也使用这个起点。
-4. 掌机在正常地图运行期间分批搜索自然 Method 1 结果，使用当前存档的 TID/SID，并读取实际 RNG 推进量。走路等额外消耗会反映到计数中；静止后也会调整到可达的后续候选。
+4. 掌机在正常地图运行期间分批搜索自然 Method 1 结果，使用当前存档的 TID/SID，并读取实际 RNG 推进量。A 阶段完成搜索和初始候选确认；进入 B 倒计时后固定目标，走路等额外消耗只反映到实际计数中。
 5. 找到候选后显示到自动 A 时机的剩余 advances。三鸟在计时到点时直接注入 A，站位由你负责；绿色只表示计时可触发，不验证你是否已经就位。超梦沿用指定脚本按键等待配置，未进入等待阶段时显示黄色，计数仍继续。超梦使用上游测得的 1 advance 偏移，三鸟使用 2 advances；三鸟松开所有按键的新路径仍须实测偏移与生成结果。
 6. 每次安装最多注入一次 A。目标已过、状态不符或时段失效时不补按。插件不会改 RNG、PID、IV 或存档内容。
 
@@ -32,8 +34,8 @@ PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时�
 
 | 下排 | 含义 |
 |---|---|
-| `Axxxxxxx` | 搜索中；数字是当前搜索到的绝对 advance |
-| `Bxxxxxxx` | 距离按 A 的剩余 advances；绿色表示计时可触发，不检查三鸟站位 |
+| `Axxxxxxx` | 搜索 / 初始候选确认中；数字是搜索位置或候选的绝对 advance |
+| `Bxxxxxxx` | 固定目标到按 A 的剩余 advances；绿色表示计时可触发，不检查三鸟站位 |
 | `C0000001` | 已排定 A，尚未执行按键回调 |
 | `C0000000` | 已注入一次 A；是否实际进入战斗仍需观察 |
 | `D00000xx` | 本次放弃触发；末尾十进制原因码见下表，不再补按 |
@@ -93,7 +95,7 @@ python -m pytest -q
 用 PokeLDN 自带的打包器，不向其仓库添加插件：
 
 ```powershell
-python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.3.pokeplugin
+python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.4.pokeplugin
 ```
 
 验证范围和已知未测项见 [验证记录](docs/VALIDATION.md)。本项目独立开发，目前交付本地测试包，没有配置远程发布地址。

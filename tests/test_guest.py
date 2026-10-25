@@ -89,10 +89,11 @@ def test_absolute_advances_start_from_title_seed_not_first_overworld(code):
     assert c.s("initial") == 0x1234
     assert c.s("index") == 3500
     assert c.s("target") == 20000
-    assert c.s("shown") == int("B0016499", 16)  # 20000 - 3500 - Mewtwo's one advance.
+    assert c.s("shown") == int("A0020000", 16)  # Candidate is not a visible countdown until confirmed.
     c.frame(3971)  # More than 64 consumes, e.g. load/extra RNG; no invented zero.
     assert c.s("index") == 3971
     assert c.s("target") == 20000
+    assert c.s("shown") == int("B0016028", 16)  # 20000 - 3971 - Mewtwo's one advance.
 
 
 def test_distance_machine_code_matches_public_lcg_for_all_bits():
@@ -244,6 +245,11 @@ def test_birds_press_once_at_deadline_without_any_held_button(code, target):
     c.frame(3500)
     assert c.s("status") == 2
     assert c.s("reason") == 0
+    assert c.s("shown") == 0xA0020000  # One provisional sample, not yet the fixed B countdown.
+    assert c.read(c.profile["palette"], 2) == 0x7FFF
+    c.frame(3502)
+    assert c.s("locked") == 1
+    assert c.s("shown") == 0xB0016496
     assert c.read(c.profile["palette"], 2) == 0x03E0
     assert c.main_loop() == 0  # Never press before the selected advance.
     c.frame(19998)
@@ -329,11 +335,62 @@ def test_stationary_two_advance_stride_reselects_a_reachable_target():
     c = Console(criteria=Criteria(shiny=False), first=20000, last=20005)
     c.frame(3500)
     assert c.s("target") == 20000
+    assert c.s("shown") == 0xA0020000
     c.frame(3502)
     assert c.s("target") == 20001  # Mewtwo's press index 20000 is reachable from an even index.
+    assert c.s("shown") == 0xB0016498
+    assert c.s("locked") == 1
     c.frame(20000)
     assert c.main_loop() == 1
     assert c.s("status") == 7
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_visible_countdown_keeps_its_target_through_transient_stride_changes(code, target):
+    probe = Console(code, target)
+    mon = predict(probe.lcg.advance(probe.seed, 20000), 12345, 2791)
+    criteria = Criteria(False, mon["nature"], None, mon["ivs"], mon["ivs"])
+    c = Console(code, target, criteria=criteria, first=20000, last=21000)
+    press = 20000 - c.plan["auto_a_offset_advances"]
+    start = 3500 + (press & 1)
+    c.frame(start)
+    c.frame(start + 2)
+    assert c.s("shown") >> 28 == 0xB
+    # A one-call interval changes parity; a later one-call interval restores it.
+    # Version 0.3.3 discards the reachable target at press-5 and shows A again.
+    for current in (press - 8, press - 7, press - 5, press - 4, press - 2):
+        c.frame(current)
+        assert c.s("shown") >> 28 == 0xB
+        assert c.s("target") == 20000
+        assert c.main_loop() == 0
+    c.frame(press)
+    assert c.main_loop() == 1
+    assert len(c.presses) == 1
+    assert c.presses[0][0] == c.lcg.advance(c.seed, 20000)
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_visible_countdown_reports_an_actual_miss_instead_of_silently_searching_again(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=21000)
+    press = 20000 - c.plan["auto_a_offset_advances"]
+    start = 3500 + (press & 1)
+    c.frame(start)
+    c.frame(start + 2)
+    assert c.s("shown") >> 28 == 0xB
+    for current in (press - 8, press - 7, press - 5, press - 3, press - 1):
+        c.frame(current)
+        assert c.s("shown") >> 28 == 0xB
+        assert c.s("target") == 20000
+        assert c.main_loop() == 0
+    c.frame(press + 1)  # The engine really skipped past the exact press advance.
+    assert c.s("shown") == 0xD0000009
+    assert c.main_loop() == 0
+    c.frame(press + 3)
+    assert c.s("shown") == 0xD0000009
+    assert c.main_loop() == 0
+    assert not c.presses
 
 
 def test_overlay_renders_all_eight_seed_digits_and_the_decimal_count():

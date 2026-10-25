@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.4 — 2026-10-25
+
+- Fix the B countdown reverting to A because a single two-advance interval caused premature parity reselection. A future interval can restore reachability; the old code had already discarded that target. Initial candidate qualification now happens while A is displayed; once B starts, the target stays fixed.
+- Keep exact-deadline, one-shot input and RNG validation. A deadline that is actually skipped reports latched `D0000009`, without a silent search restart or late A.
+- Add compiled-code regressions for transient one / two-advance intervals and actual skipped deadlines across all four builds and encounters. Reproduce the old premature reselection before rebuilding; software checks pass, hardware confirmation remains pending.
+
 ## 0.3.3 — 2026-10-25
 
 - Remove the bird profile's held-B, direction, position, facing, movement, elevation, object and script checks. The requested workflow is to walk into place, release all buttons and receive one A at the RNG deadline. Earlier versions imposed an unnecessary arming gate; positioning is now the user's responsibility.

@@ -1,4 +1,4 @@
-# 0.3.3 validation record
+# 0.3.4 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
 
@@ -6,9 +6,13 @@ Date: 2026-10-25. Status: **software checks completed; physical-console acceptan
 
 On 0.3.1 the user's English FireRed console displayed the current seed and a `B0008156` countdown in the Articuno room, followed by no A and `D0000000`. The user had released B. The sustained-B gate contradicted the requested hands-free countdown workflow; 0.3.2 only explained the gate and did not fix that design problem.
 
-Version 0.3.3 removes all bird button, player, object, position, facing, movement, elevation and script-state gates. While the map callback and RNG timing remain valid, the selected deadline schedules one A regardless of those states. The user is responsible for positioning. Mewtwo retains its script-button-wait profile. Basic callback / RNG validation and no-late-press behavior remain in both paths.
+Version 0.3.3 removed all bird button, player, object, position, facing, movement, elevation and script-state gates. While the map callback and RNG timing remain valid, the selected deadline schedules one A regardless of those states. The user is responsible for positioning. Mewtwo retains its script-button-wait profile. Basic callback / RNG validation and no-late-press behavior remain in both paths.
 
 Before changing production code, the new released-controls regression failed against the old compiled image with reason 1. After rebuilding, neutral-input tests pass for all four builds and all three birds. Deliberately invalid positioning and object states no longer suppress the scheduled A. These tests use substitute ROM callbacks and do not establish a physical-console A or generated result.
+
+The user then reported repeated B countdowns reverting to A near the deadline on 0.3.3. The only FOUND-to-SEARCH branch predicted parity reachability from a single two-advance interval and discarded the current candidate. The exact hardware RNG trace was not recorded. A synthetic trace reproduces the mechanism: index 19990 shows `B0000008`, 19991 shows `B0000007`, then 19993 shows `A0020017`. Later indices 19994, 19996 and 19998 would have reached the original Articuno press deadline, but the target was already gone.
+
+Version 0.3.4 keeps initial candidate qualification in A; once B is displayed, the selected target cannot be reselected. The same synthetic trace now shows B counts 8, 7, 5, 4, 2 and sends one A at index 19998, preserving the predicted generation state. An actually skipped deadline latches `D0000009` rather than silently searching or pressing late. New regressions failed against the 0.3.3 compiled image before the source fix.
 
 ## Previous installer correction (0.3.1)
 
@@ -25,7 +29,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**205 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**237 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -33,7 +37,7 @@ Coverage includes:
 - Title reseeding and absolute advances, including a first-map index of 3500, large intervening consumption and all 32 distance bits. Nothing resets the origin at first map entry.
 - Missing transfer chunks, corrupt image, wrong revision / game / getter instructions, existing hooks and acknowledgement errors. Partial transfer does not publish the VBlank hook.
 - Menu, lag, passed target, changed initial seed, rewind, changed RNG and expired callbacks. Failed timing conditions do not inject a late A; Mewtwo's script wait is rechecked after ReadKeys.
-- Two-advance stationary parity, multi-batch searching and future-candidate reselection.
+- Initial two-advance parity qualification before displaying B and multi-batch searching. After B starts, transient one / two-advance changes retain the same target and still produce the exact predicted generation seed across every build / encounter. Truly skipped deadlines produce a latched D09 with no late A.
 - Store-address allowlist: no guest stores to RNG, Pokemon, save blocks or ROM. Overlay seed / decimal digits and final eight OAM entries are checked.
 - Every encrypted Gen III substructure order, checksums, Bad Egg refusal, party slot ambiguity, saved-party size and the public gift parser.
 - Capture verification inherits installation conditions, checks absolute advances when a seed is supplied, and does not claim that record matching measures actual input timing.
@@ -43,7 +47,7 @@ Coverage includes:
 - Bird direction input, active scripts, absent objects, movement, changed position, wrong facing and incompatible elevations do not gate A. Each condition is tested before scheduling and after scheduling / ReadKeys, covering both former validation points.
 - Distinct and latched D reasons remain for timing failures, scene changes and Mewtwo's script / interaction-object requirements. Retired bird refusal codes are no longer generated.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1704 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1740 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 

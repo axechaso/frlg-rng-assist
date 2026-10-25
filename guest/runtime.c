@@ -19,7 +19,7 @@ __attribute__((section(".config"), used)) volatile struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
 /* Keep existing timing / Mewtwo reason numbers; retired bird gates have no code. */
 enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIRED };
-struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason; };
+struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason, locked; };
 __attribute__((section(".state"), used)) volatile struct State state = {0};
 #define C config
 #define S state
@@ -159,15 +159,17 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 stable = idle && delta == 2 && !reason;
     if (S.status == FOUND) {
         u32 press = S.target - C.offset;
-        /* At the stationary decision point these measured profiles consume two
-         * advances per loop. Walking may change which future parity is reachable.
-         * Search a later candidate; never press a passed target late. */
-        if (S.index < press && stable && ((press - S.index) & 1)) {
-            ++S.next; S.cursor = step(S.cursor); S.status = SEARCH;
-        } else if (S.index > press) { S.reason = PASSED; S.status = MISSED; }
+        /* Check initial two-call parity before showing B. Once the countdown is
+         * visible its target is fixed: a single observed stride cannot predict
+         * future strides. Only an actually passed deadline is a miss. */
+        if (S.index > press) { S.reason = PASSED; S.status = MISSED; }
         else if (S.index == press) {
             if (idle && !reason) { S.status = PENDING; U32(C.main) = (u32)press_shim; }
             else { S.reason = idle ? reason : LAG; S.status = MISSED; }
+        } else if (!S.locked && idle) {
+            if (stable && ((press - S.index) & 1)) {
+                ++S.next; S.cursor = step(S.cursor); S.status = SEARCH;
+            } else S.locked = 1;
         }
     }
     if (S.status == SEARCH && idle && overworld()) {
@@ -179,7 +181,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
         for (u32 count = 0; count < 16; ++count) {
             if (S.next > C.last) { S.status = EXHAUSTED; break; }
             if ((!stable || !((S.next - C.offset - S.index) & 1)) && matches(S.cursor)) {
-                S.target = S.next; S.generation = S.cursor; S.status = FOUND; break;
+                S.target = S.next; S.generation = S.cursor; S.locked = stable; S.status = FOUND; break;
             }
             ++S.next; S.cursor = step(S.cursor);
         }
@@ -189,14 +191,17 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 n = 0;
     if (display == SEARCH || display == FOUND) S.reason = reason;
     if (display == SEARCH) { display = 10; n = S.next; }
-    else if (display == FOUND) { display = 11; n = S.target - C.offset - S.index; }
+    else if (display == FOUND) {
+        display = S.locked ? 11 : 10;
+        n = S.locked ? S.target - C.offset - S.index : S.next;
+    }
     else if (display == FIRED || display == PENDING) { n = display == PENDING; display = 12; }
     else if (display == MISSED) { display = 13; n = S.reason; }
     else if (display == EXHAUSTED) display = 14;
     else display = 15;
     S.shown = (display << 28) | bcd(n);
     if (U32(C.main + 4) == C.cb2) {
-        u32 color = S.status == FOUND ? (reason ? 0x02FF : 0x03E0) : 0x7FFF;
+        u32 color = S.status == FOUND && S.locked ? (reason ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;
         U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
         tiles();

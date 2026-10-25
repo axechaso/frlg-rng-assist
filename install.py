@@ -65,7 +65,7 @@ def main(argv=None):
             print(f"预览已生成：{plan['gift']['path']}。本次没有连接掌机。")
         else:
             print("安装回执已确认。退出 Mystery Gift，返回标题，再选择继续游戏。")
-            print("回到地图后：上排为当前 seed；下排 A=搜索，B=剩余 advances。按住 L 查看初始 seed。")
+            print("回到地图后：上排为当前 seed；下排 A=搜索 / 初始确认，B=固定目标剩余 advances。按住 L 查看初始 seed。")
             print("L 打开帮助时，先将 OPTIONS → BUTTON MODE 设为 L/R 并保存；本插件不单独识别 ZL。")
             print("倒计时绿色=计时可触发，不代表站位已就绪。")
             if args.target == "mewtwo":
@@ -74,7 +74,7 @@ def main(argv=None):
                 print("三鸟：提前走到想按 A 的位置，松开所有按键等倒计时；到点自动按一次 A，无需按住 B。")
                 print("站位由你负责；插件不检测相邻、朝向、移动、目标对象或脚本状态。")
             print("C0000001=等待注入，C0000000=已注入 A；是否实际开战仍须观察。")
-            print("D=时序或游戏状态不符，原因见测试说明。E=无可用目标，F=计数失效，均不会补按 A。")
+            print("B 出现后不再自动换目标。D0000009=已经实际越过按键时机；其他 D / E / F 见测试说明，均不会补按 A。")
             print("捕获后把目标留在队伍中，游戏内保存，再运行「核对捕获结果」。")
             print("软重启或关闭游戏会清除注入；下一次尝试需重新安装。")
         print(f"报告：{output}")
