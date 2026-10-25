@@ -1,4 +1,4 @@
-# 0.3.4 validation record
+# 0.3.5 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
 
@@ -13,6 +13,10 @@ Before changing production code, the new released-controls regression failed aga
 The user then reported repeated B countdowns reverting to A near the deadline on 0.3.3. The only FOUND-to-SEARCH branch predicted parity reachability from a single two-advance interval and discarded the current candidate. The exact hardware RNG trace was not recorded. A synthetic trace reproduces the mechanism: index 19990 shows `B0000008`, 19991 shows `B0000007`, then 19993 shows `A0020017`. Later indices 19994, 19996 and 19998 would have reached the original Articuno press deadline, but the target was already gone.
 
 Version 0.3.4 keeps initial candidate qualification in A; once B is displayed, the selected target cannot be reselected. The same synthetic trace now shows B counts 8, 7, 5, 4, 2 and sends one A at index 19998, preserving the predicted generation state. An actually skipped deadline latches `D0000009` rather than silently searching or pressing late. New regressions failed against the 0.3.3 compiled image before the source fix.
+
+The user rejected 0.3.4's terminal miss behavior. Version 0.3.5 shows the failed attempt's D reason, then automatically resumes from a strictly later candidate in the original range when the map / main loop is available. Search catches up from the live RNG, preserving the actual initial seed and all filters. The selected B target is kept until its deadline; only actual failure starts a new attempt. No late press of the old target is injected. C after the first sent A, E exhaustion and F epoch invalidation remain terminal. A stale shim can no longer turn FIRED back into a retryable state.
+
+The new miss-to-retry regression failed against the 0.3.4 image before rebuilding. Software coverage includes four consecutive misses before a later one-shot A, recovery after busy frames / menu / Mewtwo script / object / changed RNG / expired callbacks, exact range-end candidates, exhaustion, and rejection of reseeds / rewinds. Positive shiny and nature / IV retries independently locate candidates with the public predictor and verify the eventual generated seed. None of these are new physical-console observations.
 
 ## Previous installer correction (0.3.1)
 
@@ -29,7 +33,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**237 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**299 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -37,7 +41,8 @@ Coverage includes:
 - Title reseeding and absolute advances, including a first-map index of 3500, large intervening consumption and all 32 distance bits. Nothing resets the origin at first map entry.
 - Missing transfer chunks, corrupt image, wrong revision / game / getter instructions, existing hooks and acknowledgement errors. Partial transfer does not publish the VBlank hook.
 - Menu, lag, passed target, changed initial seed, rewind, changed RNG and expired callbacks. Failed timing conditions do not inject a late A; Mewtwo's script wait is rechecked after ReadKeys.
-- Initial two-advance parity qualification before displaying B and multi-batch searching. After B starts, transient one / two-advance changes retain the same target and still produce the exact predicted generation seed across every build / encounter. Truly skipped deadlines produce a latched D09 with no late A.
+- Initial two-advance parity qualification before displaying B and multi-batch searching. After B starts, transient one / two-advance changes retain the same target and still produce the exact predicted generation seed across every build / encounter. Truly skipped deadlines report D09, then search a future candidate without a late A.
+- All builds / encounters recover after repeated misses, preserve the original seed, and can send one A at an inclusive range endpoint. Exhaustion never extends the range. Callback failures retry after recovery; stale shims after success do not rearm the run. Shiny and nature / IV conditions survive large skips and rebasing from the live RNG.
 - Store-address allowlist: no guest stores to RNG, Pokemon, save blocks or ROM. Overlay seed / decimal digits and final eight OAM entries are checked.
 - Every encrypted Gen III substructure order, checksums, Bad Egg refusal, party slot ambiguity, saved-party size and the public gift parser.
 - Capture verification inherits installation conditions, checks absolute advances when a seed is supplied, and does not claim that record matching measures actual input timing.
@@ -45,9 +50,9 @@ Coverage includes:
 - Failure statuses are retained even when the host exits nonzero, including a final status line without a newline; the installer explains the console refusal.
 - All four builds and all three birds produce exactly one A at the selected deadline with no held buttons, never before it, and restore callback1. Scheduled and sent C states are distinct.
 - Bird direction input, active scripts, absent objects, movement, changed position, wrong facing and incompatible elevations do not gate A. Each condition is tested before scheduling and after scheduling / ReadKeys, covering both former validation points.
-- Distinct and latched D reasons remain for timing failures, scene changes and Mewtwo's script / interaction-object requirements. Retired bird refusal codes are no longer generated.
+- Distinct D reasons are displayed before retrying timing failures, scene changes and Mewtwo's script / interaction-object requirements. Retired bird refusal codes are no longer generated.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1740 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1792 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 

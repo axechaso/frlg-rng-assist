@@ -372,8 +372,8 @@ def test_visible_countdown_keeps_its_target_through_transient_stride_changes(cod
 
 @pytest.mark.parametrize("code", PROFILES)
 @pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
-def test_visible_countdown_reports_an_actual_miss_instead_of_silently_searching_again(code, target):
-    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=21000)
+def test_visible_countdown_retries_only_after_an_actual_miss_and_hits_the_range_endpoint(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=20005)
     press = 20000 - c.plan["auto_a_offset_advances"]
     start = 3500 + (press & 1)
     c.frame(start)
@@ -388,9 +388,175 @@ def test_visible_countdown_reports_an_actual_miss_instead_of_silently_searching_
     assert c.s("shown") == 0xD0000009
     assert c.main_loop() == 0
     c.frame(press + 3)
-    assert c.s("shown") == 0xD0000009
+    assert c.s("status") == 2
+    assert c.s("target") == c.plan["range"]["last"] == 20005
+    assert c.s("generation") == c.lcg.advance(c.seed, 20005)
+    assert c.s("shown") == 0xB0000002
     assert c.main_loop() == 0
     assert not c.presses
+    c.frame(20005 - c.plan["auto_a_offset_advances"])
+    assert c.main_loop() == 1
+    assert c.s("initial") == c.seed
+    assert c.s("status") == 7
+    assert c.presses[0][0] == c.lcg.advance(c.seed, 20005)
+    for index in (20006, 20008, 20010):
+        c.frame(index)
+        assert c.main_loop() == 0
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_repeated_misses_keep_searching_until_one_future_candidate_is_pressed(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=21000)
+    offset = c.plan["auto_a_offset_advances"]
+    c.frame(3500 + ((20000 - offset) & 1))
+    for attempt in range(4):
+        deadline = c.s("target") - offset
+        c.frame(deadline - 2)
+        assert c.main_loop() == 0
+        c.frame(deadline + 1)
+        assert c.s("shown") == 0xD0000009
+        assert c.main_loop() == 0
+        assert not c.presses
+        c.frame(deadline + 3)
+        assert c.s("status") == 2
+        assert 20000 < c.s("target") <= 21000
+        assert c.s("target") - offset > c.s("index")
+        assert c.s("generation") == c.lcg.advance(c.seed, c.s("target"))
+        assert c.main_loop() == 0
+    generation = c.s("generation")
+    c.frame(c.s("target") - offset)
+    assert c.main_loop() == 1
+    assert c.presses[0][0] == generation
+    assert c.s("initial") == c.seed
+    c.frame(c.s("index") + 2)
+    assert c.main_loop() == 0
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_retry_never_extends_the_configured_range_when_all_candidates_are_past(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False), first=20000, last=20000)
+    c.frame(3500)
+    deadline = 20000 - c.plan["auto_a_offset_advances"]
+    c.frame(deadline + 1)
+    assert c.s("shown") == 0xD0000009
+    c.frame(deadline + 3)
+    assert c.s("shown") == 0xE0000000
+    assert c.main_loop() == 0
+    c.frame(deadline + 5)
+    assert c.s("shown") == 0xE0000000
+    assert c.main_loop() == 0
+    assert not c.presses
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("problem", ["lag", "menu", "script", "target", "rng", "expired"])
+def test_recoverable_failures_resume_search_and_stale_shims_cannot_rearm_after_success(code, problem):
+    c = Console(code, criteria=Criteria(shiny=False), first=20000, last=21000)
+    c.frame(3501)
+    deadline, reason = 19999, {"lag": 10, "menu": 4, "script": 3, "target": 5, "rng": 11, "expired": 12}[problem]
+    if problem == "menu":
+        c.set_overworld(False)
+    if problem == "script":
+        c.write(c.profile["context"] + 1, 0, 1)
+    if problem == "target":
+        c.write(c.profile["objects"] + 36 + 5, 0, 1)
+    c.frame(deadline, lag=problem == "lag")
+    if problem == "rng":
+        c.write(c.profile["rng"], c.lcg.step(c.read(c.profile["rng"])))
+        assert c.main_loop() == 0
+        c.frame(deadline + 1)
+    elif problem == "expired":
+        c.frame(deadline + 1, lag=True)
+    assert c.s("shown") == 0xD0000000 + int(str(reason), 16)
+    assert not c.presses
+    if problem == "menu":
+        c.frame(deadline + 2)
+        assert c.s("status") == 4  # Wait for the map callback before resuming.
+        c.set_overworld()
+    c.set_ready()
+    c.frame(deadline + 3)
+    assert c.s("status") == 2
+    assert c.s("target") > 20000
+    assert c.main_loop() == 0
+    generation = c.s("generation")
+    c.frame(c.s("target") - 1)
+    assert c.main_loop() == 1
+    assert c.s("status") == 7
+    assert c.presses[0][0] == generation
+    # A callback address retained by an interrupted caller must not turn FIRED
+    # back into MISSED, which would otherwise permit a second automatic A.
+    c.write(c.profile["main"] + 0x2E, 0, 2)
+    c.call(c.manifest["symbols"]["press_shim"] | 1)
+    assert c.s("status") == 7
+    c.frame(c.s("index") + 2)
+    assert c.s("shown") == 0xC0000000
+    assert c.main_loop() == 0
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("problem", ["reseed", "rewind"])
+def test_retry_does_not_cross_an_invalid_rng_epoch(problem):
+    c = Console(criteria=Criteria(shiny=False))
+    c.frame(3501)
+    c.frame(20000)
+    assert c.s("shown") == 0xD0000009
+    if problem == "reseed":
+        c.write(SEED16, 0x1234, 2)
+        c.frame(20002)
+    else:
+        c.frame(3501)
+    assert c.s("shown") == 0xF0000000
+    assert c.main_loop() == 0
+    c.frame(20004)
+    assert c.s("shown") == 0xF0000000
+    assert c.main_loop() == 0
+    assert not c.presses
+
+
+@pytest.mark.parametrize("code,target", [("BPRE", "articuno"), ("BPGF", "mewtwo")])
+@pytest.mark.parametrize("filter_kind", ["shiny", "nature_and_ivs"])
+def test_retry_preserves_filters_and_rebases_from_the_live_rng_after_a_large_skip(code, target, filter_kind):
+    probe = Console(code, target)
+    offset = probe.plan["auto_a_offset_advances"]
+    mon = predict(probe.lcg.advance(probe.seed, 20000), 12345, 2791)
+    criteria = Criteria() if filter_kind == "shiny" else Criteria(
+        False, mon["nature"], None,
+        tuple(max(0, value - 8) for value in mon["ivs"]),
+        tuple(min(31, value + 8) for value in mon["ivs"]),
+    )
+    candidates, seed = [], probe.lcg.advance(probe.seed, 20000)
+    for index in range(20000, 200000):
+        if (index - offset) % 2 == 0 and criteria.matches(predict(seed, 12345, 2791)):
+            if not candidates:
+                candidates.append(index)
+            elif index - candidates[0] < 64:
+                candidates[0] = index
+            else:
+                candidates.append(index)
+                break
+        seed = probe.lcg.step(seed)
+    assert len(candidates) == 2
+    first, last = candidates
+    c = Console(code, target, criteria=criteria, first=first, last=last)
+    c.frame(3500)
+    c.frame(3502)
+    assert c.s("target") == first
+    assert c.s("shown") >> 28 == 0xB
+    c.frame(last - offset - 16)  # Large real advance loss, but the same initial seed.
+    assert c.s("shown") == 0xD0000009
+    assert c.main_loop() == 0
+    c.frame(last - offset - 14)
+    assert c.s("target") == last
+    assert c.s("generation") == c.lcg.advance(c.seed, last)
+    c.frame(last - offset)
+    assert c.main_loop() == 1
+    assert len(c.presses) == 1
+    assert criteria.matches(c.presses[0][1])
+    assert c.presses[0][0] == c.lcg.advance(c.seed, last)
 
 
 def test_overlay_renders_all_eight_seed_digits_and_the_decimal_count():

@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.5 — 2026-10-25
+
+- Automatically search a later candidate after an actual miss, busy frame, scene / Mewtwo wait mismatch, changed pending RNG or expired callback. Briefly show the D reason, resume when the normal map / main loop is available, and preserve the original seed, configured range and filters. Do not discard B targets early or press an old deadline late.
+- End the run after one injected A, range exhaustion or epoch invalidation. Ignore stale shim invocations after success so they cannot rearm a second A.
+- Add compiled-code regressions for four consecutive misses followed by success, every supported build / encounter, recoverable callback failures, range-end success, exhaustion, reseed / rewind refusal and positive shiny / nature / IV retries. The new retry check fails against 0.3.4 before rebuilding. Hardware acceptance remains pending.
+
 ## 0.3.4 — 2026-10-25
 
 - Fix the B countdown reverting to A because a single two-advance interval caused premature parity reselection. A future interval can restore reachability; the old code had already discarded that target. Initial candidate qualification now happens while A is displayed; once B starts, the target stays fixed.

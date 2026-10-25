@@ -57,11 +57,13 @@ __attribute__((noinline)) void press_shim(void) {
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
     U32(C.main) = C.cb1;
-    u32 reason = S.status != PENDING ? EXPIRED : U32(C.rng) != S.seed ? RNG_CHANGED : readiness();
-    if (!reason) {
-        S.status = FIRED;
-        U16(C.main + 0x2E) |= 1;
-    } else { S.reason = reason; S.status = MISSED; }
+    if (S.status == PENDING) {
+        u32 reason = U32(C.rng) != S.seed ? RNG_CHANGED : readiness();
+        if (!reason) {
+            S.status = FIRED;
+            U16(C.main + 0x2E) |= 1;
+        } else { S.reason = reason; S.status = MISSED; }
+    }
     U16(0x04000208) = ime;
     ((callback)C.cb1)();
 }
@@ -157,11 +159,17 @@ __attribute__((section(".entry"), used)) void hook(void) {
     S.index = index;
     u32 reason = readiness();
     u32 stable = idle && delta == 2 && !reason;
+    /* Show each missed attempt once, then resume from a strictly later candidate.
+     * The search catch-up below rebases from the live RNG when time has moved on.
+     * Reseeds / rewinds above invalidate the epoch instead of taking this path. */
+    if (S.status == MISSED && (S.shown >> 28) == 13 && idle && overworld()) {
+        ++S.next; S.cursor = step(S.cursor); S.locked = 0; S.status = SEARCH;
+    }
     if (S.status == FOUND) {
         u32 press = S.target - C.offset;
         /* Check initial two-call parity before showing B. Once the countdown is
          * visible its target is fixed: a single observed stride cannot predict
-         * future strides. Only an actually passed deadline is a miss. */
+         * future strides. An actual miss retries a later candidate next pass. */
         if (S.index > press) { S.reason = PASSED; S.status = MISSED; }
         else if (S.index == press) {
             if (idle && !reason) { S.status = PENDING; U32(C.main) = (u32)press_shim; }
