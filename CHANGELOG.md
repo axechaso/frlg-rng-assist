@@ -1,5 +1,12 @@
 # Changes
 
+## 0.3.3 — 2026-10-25
+
+- Remove the bird profile's held-B, direction, position, facing, movement, elevation, object and script checks. The requested workflow is to walk into place, release all buttons and receive one A at the RNG deadline. Earlier versions imposed an unnecessary arming gate; positioning is now the user's responsibility.
+- Keep basic map-callback / RNG timing checks, one-shot injection and no late retries. Mewtwo retains its separate script-button-wait profile. Green on birds now describes the timer, not verified positioning. Retire bird-specific D codes without renumbering timing reasons.
+- Run released-controls regressions against the old image before rebuilding, then cover all four builds / three birds and state changes before both scheduling and sending. Software checks do not prove hardware timing; the two-advance bird offset still needs verification with controls released.
+- Update tool steps and test instructions. Explain OPTIONS → BUTTON MODE → L/R for the L seed display, no separate ZL handling, and injection loss on soft reset or game closure.
+
 ## 0.3.2 — 2026-10-25
 
 - Explain the user's 0.3.1 bird test: the seed and countdown appeared, but B was not held continuously. The bird profile requires B to arm A; the old countdown did not indicate that it was unarmed and ended in the generic `D0000000`.

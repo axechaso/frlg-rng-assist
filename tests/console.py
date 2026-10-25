@@ -146,7 +146,7 @@ class Console:
         self.write(self.profile["selected"], 1, 1)
         self.write(self.profile["context"] + 1, 2 if self.plan["profile"] == "mewtwo" else 0, 1)
         self.write(self.profile["context"] + 4, self.profile["wait"])
-        self.write(self.profile["main"] + 0x2C, 2, 2)
+        self.write(self.profile["main"] + 0x2C, 0, 2)
 
     def frame(self, index=None, *, lag=False):
         if index is not None:

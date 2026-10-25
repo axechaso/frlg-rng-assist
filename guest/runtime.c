@@ -5,7 +5,6 @@
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
-typedef signed short s16;
 typedef void (*callback)(void);
 #define U32(a) (*(volatile u32 *)(a))
 #define U16(a) (*(volatile u16 *)(a))
@@ -18,8 +17,8 @@ struct Config {
 };
 __attribute__((section(".config"), used)) volatile struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
-enum { NO_B = 1, DIRECTION_HELD, SCRIPT, NOT_OVERWORLD, NO_TARGET, MOVING, FACING, ELEVATION,
-    PASSED, LAG, RNG_CHANGED, EXPIRED };
+/* Keep existing timing / Mewtwo reason numbers; retired bird gates have no code. */
+enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIRED };
 struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason; };
 __attribute__((section(".state"), used)) volatile struct State state = {0};
 #define C config
@@ -41,42 +40,16 @@ __attribute__((noinline)) u32 distance(u32 from, u32 to) {
 
 static int overworld(void) { return U32(C.main) == C.cb1 && U32(C.main + 4) == C.cb2; }
 
-/* Zero means ready. Keep the refusal visible before and after the deadline. */
+/* Birds send A at the deadline; the user is responsible for positioning.
+ * Mewtwo retains its measured script-button-wait timing profile. */
 __attribute__((noinline)) u32 readiness(void) {
     if (!overworld()) return NOT_OVERWORLD;
-    u32 mode = U8(C.context + 1);
-    if (C.offset == 1) {
-        u32 object = U8(C.selected);
-        if (mode != 2 || U32(C.context + 4) != C.wait) return SCRIPT;
-        return object < 16
-            && (U8(C.objects + object * 36) & 1)
-            && U8(C.objects + object * 36 + 5) == C.graphics ? 0 : NO_TARGET;
-    }
-    u32 held = U16(C.main + 0x2C);
-    if (mode) return SCRIPT;
-    if (!(held & 2)) return NO_B;
-    if (held & 0xF0) return DIRECTION_HELD;
-    volatile u8 *player = 0;
-    volatile u8 *target = 0;
-    for (u32 i = 0; i < 16; ++i) {
-        volatile u8 *p = (volatile u8 *)(C.objects + i * 36);
-        if (!(p[0] & 1)) continue;
-        if (p[2] & 1) player = p;
-        if (p[5] == C.graphics) target = p;
-    }
-    if (!player || !target) return NO_TARGET;
-    if (player[0] & 2) return MOVING;
-    s16 x = *(volatile s16 *)(player + 16), y = *(volatile s16 *)(player + 18);
-    u32 direction = player[24] & 15;
-    if (direction == 1) ++y;
-    if (direction == 2) --y;
-    if (direction == 3) --x;
-    if (direction == 4) ++x;
-    if (!direction || direction > 4 || x != *(volatile s16 *)(target + 16)
-        || y != *(volatile s16 *)(target + 18)) return FACING;
-    /* The game's ObjectEventDoesElevationMatch treats zero as a wildcard. */
-    u32 a = player[11] & 15, b = target[11] & 15;
-    return a && b && a != b ? ELEVATION : 0;
+    if (C.offset != 1) return 0;
+    u32 object = U8(C.selected);
+    if (U8(C.context + 1) != 2 || U32(C.context + 4) != C.wait) return SCRIPT;
+    return object < 16
+        && (U8(C.objects + object * 36) & 1)
+        && U8(C.objects + object * 36 + 5) == C.graphics ? 0 : NO_TARGET;
 }
 
 /* Runs after ReadKeys, exactly once; stale callbacks never inject a late A. */
