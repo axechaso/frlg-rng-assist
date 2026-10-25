@@ -1,13 +1,15 @@
-# FRLG RNG Assist 0.3.0
+# FRLG RNG Assist 0.3.1
 
 PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时掌机程序，显示 seed / 倒计时，在超梦或三鸟的指定等待位置按一次 A。**这是待实机验证的测试版。软件模拟通过不代表掌机时序已经通过。**
 
 首轮先按 [实机测试步骤](docs/HARDWARE_TEST_ZH.md) 测试，不限制性格或 IV，并打开「允许非闪光」。
 
+**0.3.1 修复安装拒绝 `0xBAD00004`：**0.3.0 的初始 seed 函数地址换算方向错误，已由英文火红实机日志暴露。请先更新插件再重新测试，详见 [修改记录](CHANGELOG.md)。这次失败没有启用驻留钩子。
+
 ## 安装与支持范围
 
 - 使用 PokeLDN **v0.39.1 / 插件 API 1.11**。开发检查固定在该版本。
-- 安装 `frlg-rng-assist-0.3.0.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
+- 安装 `frlg-rng-assist-0.3.1.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
 - Games → FireRed & LeafGreen → **RNG：搜索与到点自动 A**。
 - 本版只接受 Switch 火红 / 叶绿英文、法文 **rev 0A**：BPRE、BPGE、BPRF、BPGF。原版 GBA 卡带的 rev 0/1、其他语言或改版 ROM 不在本版范围内。
 - ESP32 的 Wireless 固件版本与插件 API 是两回事；无需为了这个插件更换已经能正常运行 PokeLDN 的 Wireless 1.8.0。
@@ -78,7 +80,7 @@ python -m pytest -q
 用 PokeLDN 自带的打包器，不向其仓库添加插件：
 
 ```powershell
-python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.0.pokeplugin
+python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.1.pokeplugin
 ```
 
 验证范围和已知未测项见 [验证记录](docs/VALIDATION.md)。本项目独立开发，目前交付本地测试包，没有配置远程发布地址。

@@ -49,6 +49,11 @@ def main(argv=None):
             plan.update(status="installed", installer_ack=original)
         save_report(plan, output)
     except HostFailure as exc:
+        if exc.statuses:
+            try:
+                validate_install_ack(list(exc.statuses))
+            except ValueError as reason:
+                print(f"RNG Assist：{reason}")
         print(str(exc))
         return exc.code
     except (ValueError, RuntimeError, OSError, LookupError) as exc:

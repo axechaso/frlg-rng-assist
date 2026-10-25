@@ -9,8 +9,9 @@ import sys
 
 
 class HostFailure(RuntimeError):
-    def __init__(self, code):
+    def __init__(self, code, statuses=()):
         self.code = code
+        self.statuses = tuple(statuses)
         super().__init__(f"PokeLDN 会话结束，退出码 {code}；没有确认成功。")
 
 
@@ -74,6 +75,7 @@ def run_gift(arguments, *, radio=None):
     previous_stdout = sys.stdout
     output = StatusOutput(previous_stdout)
     previous_radio = os.environ.get("POKELDN_RADIO")
+    failure = None
     try:
         if radio:
             os.environ["POKELDN_RADIO"] = radio
@@ -84,7 +86,7 @@ def run_gift(arguments, *, radio=None):
         except SystemExit as exc:
             code = 0 if exc.code is None else exc.code
             if code != 0:
-                raise HostFailure(code if type(code) is int else 1) from None
+                failure = code if type(code) is int else 1
     finally:
         output.observe(output.pending)
         sys.stdout = previous_stdout
@@ -94,4 +96,6 @@ def run_gift(arguments, *, radio=None):
             os.environ.pop("POKELDN_RADIO", None)
         else:
             os.environ["POKELDN_RADIO"] = previous_radio
+    if failure is not None:
+        raise HostFailure(failure, output.statuses)
     return output.statuses

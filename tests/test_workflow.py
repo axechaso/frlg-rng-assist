@@ -51,6 +51,20 @@ def test_host_failure_is_propagated_without_a_success_report(tmp_path, monkeypat
     assert not output.exists()
 
 
+@pytest.mark.parametrize("status,reason", [(0xBAD00004, "初始 seed"), (0xBAD00005, "分段传输")])
+def test_failed_host_preserves_and_explains_the_console_refusal(
+    tmp_path, monkeypatch, capsys, status, reason
+):
+    def failure(*args, **kwargs):
+        raise launcher.HostFailure(1, [status])
+
+    monkeypatch.setattr(install, "run_gift", failure)
+    output = tmp_path / "refused.json"
+    assert install.main(["--enable-auto-a", "--output", str(output)]) == 1
+    assert reason in capsys.readouterr().out
+    assert not output.exists()
+
+
 def test_capture_workflow_inherits_the_installation_and_checks_actual_advances(tmp_path, monkeypatch, capsys):
     lcg, _ = backend()
     initial, advance = 0xB8C0, 20000
@@ -147,6 +161,7 @@ def test_catalog_launcher_restores_process_state_even_when_host_exits(tmp_path, 
         with pytest.raises(launcher.HostFailure) as error:
             launcher.run_gift(["--gift-file", "gift.pokegift"], radio="test-radio")
         assert error.value.code == (exit_code if type(exit_code) is int else 1)
+        assert error.value.statuses == (ACK,)
     assert sys.stdout is output
     assert sys.argv is original_argv and sys.path == original_path
     assert os.environ["POKELDN_RADIO"] == "original-radio"

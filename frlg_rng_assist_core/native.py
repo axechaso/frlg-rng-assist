@@ -29,7 +29,8 @@ GAMES = {"firered": "火红", "leafgreen": "叶绿"}
 GAME_ORIGINS = {"firered": 4, "leafgreen": 5}
 ACK = 0x524E4703
 # Revision-0A address facts from upstream v0.39.1 builds.py, follower.s, shiny.inc,
-# english_names.py. Production code does not import their private implementations.
+# english_names.py. That table is keyed by French addresses: French + offset = English.
+# Production code does not import their private implementations.
 PROFILES = {
     "BPRE": {
         "main": 0x03002380,
@@ -42,7 +43,7 @@ PROFILES = {
         "wait": 0x0806EFF5,
         "objects": 0x02036E34,
         "selected": 0x03004344,
-        "seed_getter": 0x08000585,
+        "seed_getter": 0x0800059D,
         "palette": 0x020379D6,
         "table": 0x030027E0,
     },
@@ -57,7 +58,7 @@ PROFILES = {
         "wait": 0x0806F159,
         "objects": 0x02036E34,
         "selected": 0x03004294,
-        "seed_getter": 0x0800056D,
+        "seed_getter": 0x08000585,
         "palette": 0x020379D6,
         "table": 0x03002730,
     },

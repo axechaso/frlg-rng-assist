@@ -1,13 +1,30 @@
 import random
+import struct
 
 import pytest
 
 from frlg_rng_assist_core.backend import predict
 from frlg_rng_assist_core.model import Criteria
 from frlg_rng_assist_core.native import ACK, PROFILES, guest, payloads, resident
-from console import Console, SEED16
+from console import Console, ROM_GETTERS, SEED16
 
 pytestmark = pytest.mark.emulation
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_seed_getter_uses_the_french_to_english_mapping_in_the_correct_direction(code):
+    assert PROFILES[code]["seed_getter"] == ROM_GETTERS[code] | 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_030_wrong_getter_address_reproduces_the_hardware_refusal(code):
+    c = Console(code, install=False)
+    first = bytearray(payloads(c.plan, code)[0])
+    old_address = ROM_GETTERS[code] - 0x18
+    struct.pack_into("<I", first, guest()["loader"]["symbols"]["p_getter"], old_address)
+    assert c.load(bytes(first)) == 0xBAD00004
+    assert c.read(c.profile["table"]) == c.profile["original"]
+    assert bytes(c.uc.mem_read(c.manifest["base"], c.manifest["length"])) == bytes(c.manifest["length"])
 
 
 @pytest.mark.parametrize("code", PROFILES)

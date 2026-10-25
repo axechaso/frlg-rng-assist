@@ -5,6 +5,17 @@ from unicorn import arm_const as a
 
 from frlg_rng_assist_core.backend import backend, predict
 from frlg_rng_assist_core.native import PROFILES, guest, install_plan, payloads
+from pokeldn.frlg.rom.english_names import BRACKETED
+
+# This upstream table is keyed by FRENCH addresses, not English addresses.
+# Build the ROM fixture independently of the plugin's address being tested.
+FRENCH_GETTER, ENGLISH_OFFSET = next(
+    (address, offset) for address, (name, offset) in BRACKETED.items() if name == "GetGeneratedTrainerIdLower"
+)
+ROM_GETTERS = {
+    code: FRENCH_GETTER + (ENGLISH_OFFSET if code.endswith("E") else 0)
+    for code in ("BPRE", "BPGE", "BPRF", "BPGF")
+}
 
 STOP = 0x02030000
 BUFFER = 0x0201C000
@@ -48,7 +59,7 @@ class Console:
             self.uc.mem_map(base, size)
         self.write(0x080000AC, int.from_bytes(code.encode(), "little"))
         self.write(0x080000BC, 10, 1)
-        getter = self.profile["seed_getter"] & ~1
+        getter = ROM_GETTERS[code]
         self.uc.mem_write(getter, bytes.fromhex("0148008870470000") + SEED16.to_bytes(4, "little"))
         self.write(SEED16, initial, 2)
         self.write(self.profile["sb2ptr"], SB2)

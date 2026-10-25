@@ -1,6 +1,12 @@
-# 0.3.0 validation record
+# 0.3.1 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
+
+## Hardware failure that prompted this revision
+
+The user's English FireRed (BPRE) session connected through COM8 and executed the installer, but returned **`0xBAD00004`**, with host exit code 1 and no activated resident hook. Production version 0.3.0 had interpreted `english_names.BRACKETED` in the wrong direction: its keys are French addresses, and the stored offset must be added for English. The corrected Thumb targets are `0x0800059D` for English and `0x08000585` for French.
+
+The old synthetic ROM fixture used the production profile to place the getter, so it repeated the same wrong assumption. It now obtains its ROM placement independently from the pinned upstream table. Four new direction checks were run against 0.3.0 and failed, before fixing production addresses. Additional machine-code tests reproduce the old address refusal without enabling the hook. These are regression checks, not a substitute for retrying the corrected version on the console.
 
 ## Reference environment
 
@@ -11,7 +17,7 @@ Date: 2026-10-25. Status: **software checks completed; physical-console acceptan
 
 ## Automated checks
 
-**142 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**152 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -24,6 +30,7 @@ Coverage includes:
 - Every encrypted Gen III substructure order, checksums, Bad Egg refusal, party slot ambiguity, saved-party size and the public gift parser.
 - Capture verification inherits installation conditions, checks absolute advances when a seed is supplied, and does not claim that record matching measures actual input timing.
 - Preview never starts a host; failed / missing acknowledgements and nonzero host exit codes never create an installed-success report. Launcher state is restored on host exit.
+- Failure statuses are retained even when the host exits nonzero, including a final status line without a newline; the installer explains the console refusal.
 
 `python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1824 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
