@@ -1,5 +1,13 @@
 # Changes
 
+## 0.3.2 — 2026-10-25
+
+- Explain the user's 0.3.1 bird test: the seed and countdown appeared, but B was not held continuously. The bird profile requires B to arm A; the old countdown did not indicate that it was unarmed and ended in the generic `D0000000`.
+- Colour the found-candidate overlay amber while position / button conditions are unmet and green when they are met. Make the sustained-B requirement explicit in the tool steps, switch help and installation output. The countdown still runs while unarmed; no late A is injected.
+- Latch a decimal reason code in D, distinguishing missing B, direction input, script / scene / object / movement / facing / elevation refusal, a passed target, a busy loop, changed RNG and an expired callback. Distinguish a scheduled `C0000001` from an injected `C0000000`.
+- Match the game's zero-elevation wildcard rule when comparing player and bird object elevations; continue refusing incompatible nonzero elevations.
+- Add compiled-guest regressions for missing B, arming before the deadline, one-shot A and refusal diagnostics. No console acceptance is claimed for this update.
+
 ## 0.3.1 — 2026-10-25
 
 - Fix the initial-seed getter addresses. Upstream `english_names.py` is keyed by **French** ROM addresses; French `0x08000584` plus `0x18` gives English `0x0800059C` (add the Thumb bit when calling). Version 0.3.0 interpreted that mapping backwards, so the first English FireRed hardware attempt returned `0xBAD00004` and did not enable the hook.

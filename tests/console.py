@@ -22,7 +22,7 @@ BUFFER = 0x0201C000
 PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
-STATES = ("initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status")
+STATES = ("initial", "seed", "index", "cursor", "next", "target", "generation", "shown", "status", "reason")
 
 
 class Console:

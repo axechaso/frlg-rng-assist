@@ -71,7 +71,7 @@ def build():
                 "state",
                 "distance",
                 "matches",
-                "ready",
+                "readiness",
                 "press_shim",
                 "tiles",
                 "end",

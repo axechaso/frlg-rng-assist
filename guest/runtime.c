@@ -18,7 +18,9 @@ struct Config {
 };
 __attribute__((section(".config"), used)) volatile struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
-struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status; };
+enum { NO_B = 1, DIRECTION_HELD, SCRIPT, NOT_OVERWORLD, NO_TARGET, MOVING, FACING, ELEVATION,
+    PASSED, LAG, RNG_CHANGED, EXPIRED };
+struct State { u32 initial, seed, index, cursor, next, target, generation, shown, status, reason; };
 __attribute__((section(".state"), used)) volatile struct State state = {0};
 #define C config
 #define S state
@@ -39,18 +41,21 @@ __attribute__((noinline)) u32 distance(u32 from, u32 to) {
 
 static int overworld(void) { return U32(C.main) == C.cb1 && U32(C.main + 4) == C.cb2; }
 
-/* One selected Mewtwo wait, or a stationary player facing the selected bird. */
-__attribute__((noinline)) int ready(void) {
-    if (!overworld()) return 0;
+/* Zero means ready. Keep the refusal visible before and after the deadline. */
+__attribute__((noinline)) u32 readiness(void) {
+    if (!overworld()) return NOT_OVERWORLD;
     u32 mode = U8(C.context + 1);
     if (C.offset == 1) {
         u32 object = U8(C.selected);
-        return mode == 2 && U32(C.context + 4) == C.wait && object < 16
+        if (mode != 2 || U32(C.context + 4) != C.wait) return SCRIPT;
+        return object < 16
             && (U8(C.objects + object * 36) & 1)
-            && U8(C.objects + object * 36 + 5) == C.graphics;
+            && U8(C.objects + object * 36 + 5) == C.graphics ? 0 : NO_TARGET;
     }
     u32 held = U16(C.main + 0x2C);
-    if (mode || !(held & 2) || (held & 0xF0)) return 0;
+    if (mode) return SCRIPT;
+    if (!(held & 2)) return NO_B;
+    if (held & 0xF0) return DIRECTION_HELD;
     volatile u8 *player = 0;
     volatile u8 *target = 0;
     for (u32 i = 0; i < 16; ++i) {
@@ -59,15 +64,19 @@ __attribute__((noinline)) int ready(void) {
         if (p[2] & 1) player = p;
         if (p[5] == C.graphics) target = p;
     }
-    if (!player || !target || (player[0] & 2)) return 0;
+    if (!player || !target) return NO_TARGET;
+    if (player[0] & 2) return MOVING;
     s16 x = *(volatile s16 *)(player + 16), y = *(volatile s16 *)(player + 18);
     u32 direction = player[24] & 15;
     if (direction == 1) ++y;
     if (direction == 2) --y;
     if (direction == 3) --x;
     if (direction == 4) ++x;
-    return direction && direction <= 4 && x == *(volatile s16 *)(target + 16)
-        && y == *(volatile s16 *)(target + 18) && player[11] % 16 == target[11] % 16;
+    if (!direction || direction > 4 || x != *(volatile s16 *)(target + 16)
+        || y != *(volatile s16 *)(target + 18)) return FACING;
+    /* The game's ObjectEventDoesElevationMatch treats zero as a wildcard. */
+    u32 a = player[11] & 15, b = target[11] & 15;
+    return a && b && a != b ? ELEVATION : 0;
 }
 
 /* Runs after ReadKeys, exactly once; stale callbacks never inject a late A. */
@@ -75,10 +84,11 @@ __attribute__((noinline)) void press_shim(void) {
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
     U32(C.main) = C.cb1;
-    if (S.status == PENDING && U32(C.rng) == S.seed && ready()) {
+    u32 reason = S.status != PENDING ? EXPIRED : U32(C.rng) != S.seed ? RNG_CHANGED : readiness();
+    if (!reason) {
         S.status = FIRED;
         U16(C.main + 0x2E) |= 1;
-    } else S.status = MISSED;
+    } else { S.reason = reason; S.status = MISSED; }
     U16(0x04000208) = ime;
     ((callback)C.cb1)();
 }
@@ -151,15 +161,13 @@ __attribute__((section(".entry"), used)) void hook(void) {
     /* A second interrupt before callback1 means the pending press has expired. */
     if (S.status == PENDING) {
         if (U32(C.main) == (u32)press_shim) U32(C.main) = C.cb1;
-        S.status = MISSED;
+        S.reason = EXPIRED; S.status = MISSED;
     }
     if (U32(C.main + 4) == C.cb2) {
         for (u32 i = 0; i < 8; ++i) {
             u32 oam = C.main + 0x3F8 + i * 8;
             U16(oam) = 0x8002; U16(oam + 2) = 174 + i * 8; U16(oam + 4) = 0xF3F0 + i * 2;
         }
-        U16(C.palette) = U16(C.palette - 0x400) = 0x7FFF;
-        U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
     }
     ((callback)C.original)();
     if (!S.status) {
@@ -174,7 +182,8 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 delta = index - S.index;
     if (index < S.index || index > 9999999 || S.initial != ((u16 (*)(void))C.seed_getter)()) S.status = DESYNC;
     S.index = index;
-    u32 stable = idle && delta == 2 && ready();
+    u32 reason = readiness();
+    u32 stable = idle && delta == 2 && !reason;
     if (S.status == FOUND) {
         u32 press = S.target - C.offset;
         /* At the stationary decision point these measured profiles consume two
@@ -182,10 +191,10 @@ __attribute__((section(".entry"), used)) void hook(void) {
          * Search a later candidate; never press a passed target late. */
         if (S.index < press && stable && ((press - S.index) & 1)) {
             ++S.next; S.cursor = step(S.cursor); S.status = SEARCH;
-        } else if (S.index > press) S.status = MISSED;
+        } else if (S.index > press) { S.reason = PASSED; S.status = MISSED; }
         else if (S.index == press) {
-            if (idle && ready()) { S.status = PENDING; U32(C.main) = (u32)press_shim; }
-            else S.status = MISSED;
+            if (idle && !reason) { S.status = PENDING; U32(C.main) = (u32)press_shim; }
+            else { S.reason = idle ? reason : LAG; S.status = MISSED; }
         }
     }
     if (S.status == SEARCH && idle && overworld()) {
@@ -205,12 +214,18 @@ __attribute__((section(".entry"), used)) void hook(void) {
     }
     u32 display = S.status;
     u32 n = 0;
+    if (display == SEARCH || display == FOUND) S.reason = reason;
     if (display == SEARCH) { display = 10; n = S.next; }
     else if (display == FOUND) { display = 11; n = S.target - C.offset - S.index; }
-    else if (display == FIRED || display == PENDING) display = 12;
-    else if (display == MISSED) display = 13;
+    else if (display == FIRED || display == PENDING) { n = display == PENDING; display = 12; }
+    else if (display == MISSED) { display = 13; n = S.reason; }
     else if (display == EXHAUSTED) display = 14;
     else display = 15;
     S.shown = (display << 28) | bcd(n);
-    if (U32(C.main + 4) == C.cb2) tiles();
+    if (U32(C.main + 4) == C.cb2) {
+        u32 color = S.status == FOUND ? (reason ? 0x02FF : 0x03E0) : 0x7FFF;
+        U16(C.palette) = U16(C.palette - 0x400) = color;
+        U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
+        tiles();
+    }
 }

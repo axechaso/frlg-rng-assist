@@ -197,6 +197,10 @@ def test_never_presses_when_target_cannot_be_hit(condition):
         at = 3000
     c.frame(at, lag=condition == "lag")
     assert c.s("status") in (4, 5)
+    if condition in ("lag", "menu", "not_ready", "passed"):
+        reason = {"lag": 10, "menu": 4, "not_ready": 3, "passed": 9}[condition]
+        assert c.s("reason") == reason
+        assert c.s("shown") == 0xD0000000 + int(str(reason), 16)
     if condition != "menu":
         assert c.main_loop() == 0
     assert not c.presses
@@ -209,6 +213,7 @@ def test_pending_shim_expires_on_second_interrupt_without_late_press():
     assert c.s("status") == 6
     c.frame(20000, lag=True)
     assert c.s("status") == 4
+    assert c.s("shown") == 0xD0000012
     assert c.main_loop() == 0
     assert not c.presses
 
@@ -228,6 +233,88 @@ def test_shim_rechecks_scene_and_rng_after_readkeys(change):
         c.write(c.profile["main"] + 0x2C, 0, 2)
     assert c.main_loop() == 0
     assert c.s("status") == 4
+    assert c.s("reason") == {"rng": 11, "context": 3, "bird_position": 7, "bird_release_b": 1}[change]
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["articuno", "zapdos", "moltres"])
+def test_bird_countdown_without_b_explains_refusal_and_never_presses_late(code, target):
+    # User's 0.3.1 report: at the bird, but B was not held. The old overlay
+    # kept counting without warning and collapsed every refusal to D0000000.
+    c = Console(code, target, criteria=Criteria(shiny=False))
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    c.frame(3500)
+    assert c.s("status") == 2
+    assert c.s("reason") == 1
+    assert c.read(c.profile["palette"], 2) == 0x02FF  # Amber: not armed.
+    c.frame(19998)
+    assert c.s("shown") == 0xD0000001  # B not held at the trigger check.
+    assert c.main_loop() == 0
+    # Pressing B after the deadline must not arm a late A or overwrite the reason.
+    c.write(c.profile["main"] + 0x2C, 2, 2)
+    c.frame(20000)
+    assert c.s("shown") == 0xD0000001
+    assert c.main_loop() == 0
+    assert not c.presses
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["articuno", "zapdos", "moltres"])
+def test_holding_b_before_deadline_turns_countdown_green_and_enables_exactly_one_a(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False))
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    c.frame(3500)
+    assert c.read(c.profile["palette"], 2) == 0x02FF
+    c.write(c.profile["main"] + 0x2C, 2, 2)
+    c.frame(3502)
+    assert c.s("reason") == 0
+    assert c.read(c.profile["palette"], 2) == 0x03E0
+    c.frame(19998)
+    assert c.s("status") == 6
+    assert c.s("shown") == 0xC0000001  # Scheduled, not yet sent.
+    assert not c.presses
+    assert c.main_loop() == 1
+    c.frame(20000)
+    assert c.s("shown") == 0xC0000000
+    assert c.main_loop() == 0
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize(
+    "problem,reason",
+    [("direction_held", 2), ("script", 3), ("target", 5), ("moving", 6), ("facing", 7), ("elevation", 8)],
+)
+def test_bird_refusal_reports_the_unmet_condition(problem, reason):
+    c = Console(target="articuno", criteria=Criteria(shiny=False))
+    c.frame(3500)
+    objects = c.profile["objects"]
+    if problem == "direction_held":
+        c.write(c.profile["main"] + 0x2C, 0x42, 2)
+    if problem == "script":
+        c.write(c.profile["context"] + 1, 1, 1)
+    if problem == "target":
+        c.write(objects + 36 + 5, 0, 1)
+    if problem == "moving":
+        c.write(objects, 0x10003)
+    if problem == "facing":
+        c.write(objects + 24, 1, 1)
+    if problem == "elevation":
+        c.write(objects + 11, 4, 1)
+    c.frame(19998)
+    assert c.s("status") == 4
+    assert c.s("shown") == 0xD0000000 + reason
+    assert c.main_loop() == 0
+    assert not c.presses
+
+
+@pytest.mark.parametrize("player,target", [(0, 3), (3, 0), (0, 0), (3, 3)])
+def test_zero_object_elevation_is_compatible_like_the_game(player, target):
+    # pret/pokefirered src/event_object_movement.c:ObjectEventDoesElevationMatch:
+    # an elevation mismatch rejects only when both elevations are nonzero.
+    c = Console(target="articuno", criteria=Criteria(shiny=False))
+    c.write(c.profile["objects"] + 11, player, 1)
+    c.write(c.profile["objects"] + 36 + 11, target, 1)
+    assert c.call(c.manifest["symbols"]["readiness"] | 1) == 0
 
 
 def test_no_stores_to_rng_pokemon_save_blocks_or_rom():

@@ -1,8 +1,16 @@
-# 0.3.1 validation record
+# 0.3.2 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
 
-## Hardware failure that prompted this revision
+## Hardware observations
+
+On 0.3.1 the user's English FireRed console displayed the current seed and a `B0008156` countdown in the Articuno room. The user later reported no A and `D0000000`, and confirmed that B had not been held continuously. This is an unmet arming condition in the bird profile, not evidence of an injected A. The old display did not expose readiness or distinguish refusal reasons. The 0.3.2 update adds amber / green readiness and latched D reasons without removing the sustained-B requirement or allowing a late press.
+
+The compiled-code model reproduces that specific missing-B path, then checks that holding B before the deadline enables the one-shot A. Its ROM callbacks remain substitutes: no physical-console A or generated result has been verified.
+
+Object elevation compatibility was checked against the primary decompilation's [ObjectEventDoesElevationMatch](https://github.com/pret/pokefirered/blob/master/src/event_object_movement.c): zero is a wildcard, while differing nonzero values reject. The plugin now uses that rule when comparing object elevations. This correction is not presented as the cause of the user's missed-B test.
+
+## Previous installer correction (0.3.1)
 
 The user's English FireRed (BPRE) session connected through COM8 and executed the installer, but returned **`0xBAD00004`**, with host exit code 1 and no activated resident hook. Production version 0.3.0 had interpreted `english_names.BRACKETED` in the wrong direction: its keys are French addresses, and the stored offset must be added for English. The corrected Thumb targets are `0x0800059D` for English and `0x08000585` for French.
 
@@ -17,7 +25,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**152 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**186 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -31,8 +39,10 @@ Coverage includes:
 - Capture verification inherits installation conditions, checks absolute advances when a seed is supplied, and does not claim that record matching measures actual input timing.
 - Preview never starts a host; failed / missing acknowledgements and nonzero host exit codes never create an installed-success report. Launcher state is restored on host exit.
 - Failure statuses are retained even when the host exits nonzero, including a final status line without a newline; the installer explains the console refusal.
+- Missing B across all four builds and all three birds: amber countdown, `D0000001`, no A and no late rearming. Holding B before the deadline turns the palette green and produces one A. Scheduled and sent C states are distinct.
+- Distinct and latched D reasons for input, script, scene, object, movement, facing, elevation and timing refusals. Zero-elevation compatibility is covered separately.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1824 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1916 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 
