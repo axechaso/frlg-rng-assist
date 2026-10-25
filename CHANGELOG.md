@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.7 — 2026-10-25
+
+- Fix repeated D11 cancellation at an otherwise valid deadline. On the measured wireless path, `HandleLinkConnection` calls `RfuMain1`, which draws `Random()` before callback1. The shim now requires the exact successor of the post-VBlank seed, rather than the unchanged seed. The existing overall Mewtwo / bird offsets already include that draw and remain 1 / 2 advances. Missing or additional draws still cancel the A.
+- Correct the synthetic main loop to include the link draw. Model remaining generation draws separately from the configured offset, so accepting A cannot silently move the predicted PID seed by one. Reproduce all 16 build / encounter failures against 0.3.6 before rebuilding, then cover exact generation seeds, one-shot input, missing / extra draws, and existing retry / colour / notice behavior.
+- Keep the hardware status explicit: software checks and frozen-host loading pass; actual released-controls encounters and resulting PID / IVs still require physical-console confirmation. Update the package and test instructions to 0.3.7.
+
 ## 0.3.6 — 2026-10-25
 
 - Keep a failed attempt's D reason in red for 60 visible map frames (about one second) before resuming search. Television / menu time and the held-L seed view do not consume the notice, and no A is sent during it. Continue tracking the actual RNG throughout, then catch up within the original range and filters.

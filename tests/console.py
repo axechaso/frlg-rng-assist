@@ -17,6 +17,13 @@ ROM_GETTERS = {
     for code in ("BPRE", "BPGE", "BPRF", "BPGF")
 }
 
+# Independent phase model for the measured wireless path. AgbMain runs ReadKeys,
+# HandleLinkConnection -> RfuMain1 -> Random, then callback1/callback2. The
+# upstream post-VBlank offsets already include that first draw: generation at
+# Mewtwo's button wait has none left, and the birds' talk path has one left.
+# Do not derive these remaining draws from the plugin's configured offset.
+CALLBACK_DRAWS_TO_GENERATION = {"mewtwo": 0, "articuno": 1, "zapdos": 1, "moltres": 1}
+
 STOP = 0x02030000
 BUFFER = 0x0201C000
 PARAM = 0x02030200
@@ -77,6 +84,7 @@ class Console:
         self.write(self.profile["rng"], self.lcg.advance(initial, index))
         self.seed = initial
         self.presses = []
+        self.phases = []
         self.writes = []
         self.instructions = 0
         self.record = True
@@ -93,8 +101,12 @@ class Console:
         self.instructions += 1
         if address == self.profile["original"] & ~1:
             self.write(self.profile["rng"], self.lcg.step(self.read(self.profile["rng"])))
+            self.phases.append(("vblank", self.read(self.profile["rng"])))
         if address == self.profile["cb1"] & ~1 and self.read(self.profile["main"] + 0x2E, 2) & 1:
-            seed = self.lcg.advance(self.read(self.profile["rng"]), self.plan["auto_a_offset_advances"])
+            self.phases.append(("callback1_a", self.read(self.profile["rng"])))
+            seed = self.lcg.advance(
+                self.read(self.profile["rng"]), CALLBACK_DRAWS_TO_GENERATION[self.plan["target"]]
+            )
             self.presses.append((seed, predict(seed, 12345, 2791)))
 
     def _write(self, uc, access, address, size, value, user):
@@ -157,8 +169,13 @@ class Console:
         self.write(self.profile["main"] + 0x1C, int(lag), 2)
         self.call(self.read(self.profile["table"]))
 
-    def main_loop(self):
+    def main_loop(self, *, rfu_calls=1):
         self.write(self.profile["main"] + 0x2E, 0, 2)  # ReadKeys
+        # RfuMain1 passes Random() to rfu_LMAN_manager_entity before CallCallbacks,
+        # including after the RFU manager shuts down. This was absent in <=0.3.6.
+        for _ in range(rfu_calls):
+            self.write(self.profile["rng"], self.lcg.step(self.read(self.profile["rng"])))
+        self.phases.append(("link", self.read(self.profile["rng"])))
         self.call(self.read(self.profile["main"]))
         return self.read(self.profile["main"] + 0x2E, 2)
 

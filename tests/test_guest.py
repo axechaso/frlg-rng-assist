@@ -12,6 +12,47 @@ pytestmark = pytest.mark.emulation
 
 
 @pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_wireless_link_draw_before_callback_is_expected_and_preserves_generation_seed(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False))
+    # Independent measured post-VBlank deadlines, rather than deriving the
+    # encounter's remaining script consumption from the configured offset.
+    deadline = 19999 if target == "mewtwo" else 19998
+    c.frame(3500)
+    c.frame(deadline)
+    assert c.s("status") == 6
+    assert c.s("seed") == c.lcg.advance(c.seed, deadline)
+    assert c.main_loop() == 1
+    assert c.phases[-3:] == [
+        ("vblank", c.lcg.advance(c.seed, deadline)),
+        ("link", c.lcg.advance(c.seed, deadline + 1)),
+        ("callback1_a", c.lcg.advance(c.seed, deadline + 1)),
+    ]
+    assert c.s("status") == 7
+    assert c.read(c.profile["main"]) == c.profile["cb1"]
+    assert c.presses[0][0] == c.s("generation") == c.lcg.advance(c.seed, 20000)
+    c.frame(20002)
+    assert c.main_loop() == 0
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+@pytest.mark.parametrize("rfu_calls", [0, 2, 3])
+def test_callback_rejects_missing_or_additional_draws_instead_of_pressing_the_wrong_seed(code, target, rfu_calls):
+    c = Console(code, target, criteria=Criteria(shiny=False))
+    deadline = 19999 if target == "mewtwo" else 19998
+    c.frame(3500)
+    c.frame(deadline)
+    assert c.s("status") == 6
+    assert c.main_loop(rfu_calls=rfu_calls) == 0
+    assert c.s("status") == 4
+    assert c.s("reason") == 11
+    assert c.read(c.profile["main"]) == c.profile["cb1"]
+    assert not c.presses
+
+
+@pytest.mark.parametrize("code", PROFILES)
 def test_seed_getter_uses_the_french_to_english_mapping_in_the_correct_direction(code):
     assert PROFILES[code]["seed_getter"] == ROM_GETTERS[code] | 1
 

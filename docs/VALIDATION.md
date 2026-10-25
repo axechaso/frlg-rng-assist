@@ -1,6 +1,16 @@
-# 0.3.6 validation record
+# 0.3.7 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
+
+## D11 callback-phase correction (0.3.7)
+
+The user reports repeatable D11 at reachable deadlines with matching parity on 0.3.6. The shim compared the live callback seed to an unchanged post-VBlank sample. This omitted a normal phase: [AgbMain](https://github.com/pret/pokefirered/blob/master/src/main.c) calls ReadKeys, then HandleLinkConnection, then callback1 / callback2; the wireless branch calls [RfuMain1](https://github.com/pret/pokefirered/blob/master/src/link_rfu_2.c), which passes Random() to the RFU manager even when it is shutting down. Thus the measured wireless path advances once between sampling and the shim.
+
+The old synthetic main loop omitted that draw too. Before changing runtime.c or rebuilding guest.json, the corrected phase model failed the positive regression for all four builds and four encounters. An isolated comparison of the previous committed image and the rebuilt image records D11 / no A for 0.3.6 and one A for 0.3.7. This reproduces a source-supported mechanism consistent with the hardware report; no console RNG trace was collected to establish the cause on the device directly.
+
+The shim now requires exactly step(post-VBlank seed). It does not accept arbitrary changes or press the old target late. The measured total offsets stay Mewtwo 1 / birds 2: after the link draw, the synthetic generation callback consumes 0 / 1 remaining draws respectively. Those callback draws are independently specified by encounter, rather than copied from the production offset. Tests verify the exact generation state at absolute advance 20000, normal shiny / nature / IV results, one-shot A and callback restoration. Zero, two or three draws before the callback still produce D11 without A for every build / encounter. This profile covers the measured wireless path; a path without its expected draw is deliberately rejected, as its generation timing has not been calibrated here.
+
+The previous parity colours, 60 visible map frames of miss notice, original-range retries, and terminal success / exhaustion / invalid-epoch behavior remain covered. Neither the corrected source model nor these tests establish hardware input reception or exact bird generation timing after controls are released.
 
 ## Hardware observations
 
@@ -37,11 +47,12 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**335 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**399 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
 - All four supported build profiles and all four encounters; natural Method 1 PID / six-IV / nature predictions, positive shiny matches, single A, and callback restoration.
+- A normal pre-callback link draw reaches the shim and preserves the exact target generation seed for every build / encounter. Missing or additional pre-callback draws still cancel A; the unchanged-seed comparison in the prior image is reproduced as D11.
 - Title reseeding and absolute advances, including a first-map index of 3500, large intervening consumption and all 32 distance bits. Nothing resets the origin at first map entry.
 - Missing transfer chunks, corrupt image, wrong revision / game / getter instructions, existing hooks and acknowledgement errors. Partial transfer does not publish the VBlank hook.
 - Menu, lag, passed target, changed initial seed, rewind, changed RNG and expired callbacks. Failed timing conditions do not inject a late A; Mewtwo's script wait is rechecked after ReadKeys.
@@ -58,7 +69,7 @@ Coverage includes:
 - A D reason stays red for 60 visible map frames with no input injection before retrying. TV-sized 312-call animation bursts plus the substitute VBlank's one call retain a future target and catch up exactly; an actual overrun waits until map return to display its reason. TV time and the held-L seed view cannot consume the notice. This models RNG consumption and scene transitions, not actual TV ROM execution.
 - Yellow / green countdown colours compare current advances to the automatic-A deadline, rather than the PID-generation index. Temporary parity changes never discard a visible B target.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1864 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1880 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 
@@ -75,7 +86,7 @@ The smoke test uses paths with spaces and the app's existing child Python proces
 
 ## What these checks do not prove
 
-No retail / Switch ROM was run in the synthetic-memory tests. The model substitutes the original VBlank and callback code and advances the RNG according to the measured upstream offsets. Therefore this suite cannot establish real script timing, sprite availability, interrupt cycle budgets or console stability across the title transition.
+No retail / Switch ROM was run in the synthetic-memory tests. The model substitutes the original VBlank and callback code, includes the source-backed wireless link draw before callback1, and models the remaining encounter draws separately. Therefore this suite cannot establish real script timing, sprite availability, interrupt cycle budgets or console stability across the title transition.
 
 No physical console / board session has been completed for this version. The bird offset remains two advances, originally measured upstream with B held; the released-controls path and actual generated result remain **unverified on hardware**. Follow `HARDWARE_TEST_ZH.md`: first test unrestricted normal encounters, then shiny encounters. IV restrictions are not a first-round acceptance requirement.
 

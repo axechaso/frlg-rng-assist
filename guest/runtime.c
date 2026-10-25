@@ -56,13 +56,16 @@ __attribute__((noinline)) u32 readiness(void) {
         && U8(C.objects + object * 36 + 5) == C.graphics ? 0 : NO_TARGET;
 }
 
-/* Runs after ReadKeys, exactly once; stale callbacks never inject a late A. */
+/* Runs after ReadKeys and HandleLinkConnection, exactly once. RfuMain1 draws
+ * Random before callback1 even with its manager shut down. The measured
+ * post-VBlank offsets (Mewtwo 1, birds 2) already include this one draw.
+ * Require that exact successor; extra draws / reseeds still cancel the A. */
 __attribute__((noinline)) void press_shim(void) {
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
     U32(C.main) = C.cb1;
     if (S.status == PENDING) {
-        u32 reason = U32(C.rng) != S.seed ? RNG_CHANGED : readiness();
+        u32 reason = U32(C.rng) != step(S.seed) ? RNG_CHANGED : readiness();
         if (!reason) {
             S.status = FIRED;
             U16(C.main + 0x2E) |= 1;
