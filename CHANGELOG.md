@@ -1,5 +1,11 @@
 # Changes
 
+## 0.3.8 — 2026-10-25
+
+- Hold L+R on the map to view the last current party member's full eight-digit hexadecimal PID in white, with its party position (1..6) below. Release R to return to L's existing initial-seed view, or release both for the normal overlay. R alone does not switch views. Continue RNG tracking, search and one-shot A while viewing; retain hidden D notices until the ordinary display is visible again.
+- Read the live party's unencrypted personality word, not a saved-party copy. Read the party count as a byte, reject counts outside 1..6 before indexing, and show FFFFFFFF / 00000000 when no valid tail slot exists. Zero and FFFFFFFF remain valid PIDs when the displayed slot is 1..6. Viewing writes no party / save / RNG data.
+- Cover every supported build and party size, visible PID digits including leading zeros, live changes, invalid-count read boundaries, L / L+R / R switching, hidden notices, menus and exact one-shot A during PID viewing. Hardware display and timing acceptance remain pending.
+
 ## 0.3.7 — 2026-10-25
 
 - Fix repeated D11 cancellation at an otherwise valid deadline. On the measured wireless path, `HandleLinkConnection` calls `RfuMain1`, which draws `Random()` before callback1. The shim now requires the exact successor of the post-VBlank seed, rather than the unchanged seed. The existing overall Mewtwo / bird offsets already include that draw and remain 1 / 2 advances. Missing or additional draws still cancel the A.

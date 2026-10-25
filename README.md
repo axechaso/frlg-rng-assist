@@ -1,8 +1,10 @@
-# FRLG RNG Assist 0.3.7
+# FRLG RNG Assist 0.3.8
 
 PokeLDN 的第三方插件：设置 RNG advances 范围与条件，注入临时掌机程序，显示 seed / 倒计时，到点自动按一次 A。**这是待实机验证的测试版。软件模拟通过不代表掌机时序已经通过。**
 
 首轮先按 [实机测试步骤](docs/HARDWARE_TEST_ZH.md) 测试，不限制性格或 IV，并打开「允许非闪光」。
+
+**0.3.8 新增按住 L+R 查看队尾 PID：**上排白色显示完整 8 位十六进制 PID，下排显示队尾位置 1–6。松开后恢复；单独按 L 仍查看初始 seed。读取当前队伍，无需先保存，查看时倒计时和自动 A 继续运行。
 
 **三鸟到点直接按一次 A，无需按住 B，也不检测相邻、朝向、移动、目标对象或脚本状态。**你提前走到要按 A 的位置，松开按键等待即可。旧版的持续按 B 门槛不符合这个流程，已在 0.3.3 移除；此前的初始 seed 地址修复和时序错误码保留，详见 [修改记录](CHANGELOG.md)。
 
@@ -13,7 +15,7 @@ B 倒计时与自动 A 时机奇偶不一致时为黄色，一致且当前回调
 ## 安装与支持范围
 
 - 使用 PokeLDN **v0.39.1 / 插件 API 1.11**。开发检查固定在该版本。
-- 安装 `frlg-rng-assist-0.3.7.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
+- 安装 `frlg-rng-assist-0.3.8.pokeplugin`：Plugins → Add a plugin；已有旧版时用插件卡片的文件更新入口。
 - Games → FireRed & LeafGreen → **RNG：搜索与到点自动 A**。
 - 本版只接受 Switch 火红 / 叶绿英文、法文 **rev 0A**：BPRE、BPGE、BPRF、BPGF。原版 GBA 卡带的 rev 0/1、其他语言或改版 ROM 不在本版范围内。
 - ESP32 的 Wireless 固件版本与插件 API 是两回事；无需为了这个插件更换已经能正常运行 PokeLDN 的 Wireless 1.8.0。
@@ -45,7 +47,13 @@ B 倒计时与自动 A 时机奇偶不一致时为黄色，一致且当前回调
 | `E0000000` | 范围内没有剩余可用候选；不按 A |
 | `F0000000` | 初始 seed 改变、回退或超出计数范围；不按 A |
 
-**按住 L**：上排改为实际初始 seed，下排改为当前绝对 advances。松开恢复；L 不重置计数。查看 seed 期间不消耗 D 提示时间，松开后再显示剩余提示。先把游戏 **OPTIONS → BUTTON MODE 设为 L/R 并保存**，避免 L 打开帮助页。本插件不单独读取 ZL。菜单和战斗中不绘制这个显示。
+**按住 L**：上排改为实际初始 seed，下排改为当前绝对 advances。松开恢复；L 不重置计数。
+
+**同时按住 L+R**：上排白色显示当前队尾宝可梦的完整 8 位十六进制 PID；下排 `00000001`–`00000006` 表示队尾位置。包含前导零；`00000000` 也可能是有效 PID。松开 R、继续按 L 时返回初始 seed 视图，两键都松开时恢复正常显示。单独按 R 不切换插件显示。
+
+队伍为空或数量异常时，上排 `FFFFFFFF`、下排 `00000000` 表示没有可显示的队尾 PID。读取的是当前队伍，重排或队伍数量改变后随即更新，无需先保存。新捕获宝可梦送进电脑时，队尾仍是原有队员；要查看它，请先放进队伍。
+
+查看 seed / PID 时不会暂停实际计数、搜索或自动 A；隐藏的 D 提示时间会保留到松开相应按键后再计。先把游戏 **OPTIONS → BUTTON MODE 设为 L/R 并保存**，避免 L/R 打开帮助页。本插件不单独读取 ZL/ZR。菜单和战斗中不绘制这个显示。
 
 | D 原因码 | 条件 |
 |---|---|
@@ -100,7 +108,7 @@ python -m pytest -q
 用 PokeLDN 自带的打包器，不向其仓库添加插件：
 
 ```powershell
-python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.7.pokeplugin
+python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.3.8.pokeplugin
 ```
 
 验证范围和已知未测项见 [验证记录](docs/VALIDATION.md)。本项目独立开发，目前交付本地测试包，没有配置远程发布地址。

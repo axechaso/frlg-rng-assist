@@ -66,7 +66,8 @@ def main(argv=None):
         else:
             print("安装回执已确认。退出 Mystery Gift，返回标题，再选择继续游戏。")
             print("回到地图后：上排为当前 seed；下排 A=搜索 / 初始确认，B=固定目标剩余 advances。按住 L 查看初始 seed。")
-            print("L 打开帮助时，先将 OPTIONS → BUTTON MODE 设为 L/R 并保存；本插件不单独识别 ZL。")
+            print("同时按住 L+R 查看队尾：上排白色 8 位十六进制 PID，下排队伍位置 1..6；松开恢复，查看不暂停计时或自动 A。")
+            print("L/R 打开帮助时，先将 OPTIONS → BUTTON MODE 设为 L/R 并保存；本插件不单独识别 ZL/ZR。")
             print("倒计时：与自动 A 时机奇偶不一致为黄色，一致且当前可触发为绿色；不代表站位已就绪。")
             if args.target == "mewtwo":
                 print("超梦：提前对话，等叫声和文字结束，停在按键等待；之后不要再手动按 A/B。")

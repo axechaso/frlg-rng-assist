@@ -28,7 +28,7 @@ ENCOUNTERS = {
 GAMES = {"firered": "火红", "leafgreen": "叶绿"}
 GAME_ORIGINS = {"firered": 4, "leafgreen": 5}
 ACK = 0x524E4703
-# Revision-0A address facts from upstream v0.39.1 builds.py, follower.s, shiny.inc,
+# Revision-0A address facts from upstream v0.39.1 builds.py, follower.s, shiny.inc, rom_map.py,
 # english_names.py. That table is keyed by French addresses: French + offset = English.
 # Production code does not import their private implementations.
 PROFILES = {
@@ -45,6 +45,8 @@ PROFILES = {
         "selected": 0x03004344,
         "seed_getter": 0x0800059D,
         "palette": 0x020379D6,
+        "party": 0x02024280,
+        "party_count": 0x02024025,
         "table": 0x030027E0,
     },
     "BPRF": {
@@ -60,6 +62,8 @@ PROFILES = {
         "selected": 0x03004294,
         "seed_getter": 0x08000585,
         "palette": 0x020379D6,
+        "party": 0x02024280,
+        "party_count": 0x02024025,
         "table": 0x03002730,
     },
 }
@@ -78,6 +82,8 @@ CONFIG_WORDS = (
     "selected",
     "seed_getter",
     "palette",
+    "party",
+    "party_count",
 )
 
 
@@ -142,7 +148,7 @@ def resident(plan, code):
     multiplier = (lcg.advance(1, first) - increment) & 0xFFFFFFFF
     order = (0, 1, 2, 5, 3, 4)  # Random's IV fields: HP, ATK, DEF, SPE, SPA, SPD.
     settings = struct.pack(
-        "<16I16B",
+        "<18I16B",
         *(profile[name] for name in CONFIG_WORDS),
         first,
         plan["range"]["last"],

@@ -2,6 +2,7 @@ import random
 import struct
 
 import pytest
+from unicorn import UC_HOOK_MEM_READ
 
 from frlg_rng_assist_core.backend import predict
 from frlg_rng_assist_core.model import Criteria
@@ -9,6 +10,128 @@ from frlg_rng_assist_core.native import ACK, PROFILES, guest, payloads, resident
 from console import Console, ROM_GETTERS, SEED16
 
 pytestmark = pytest.mark.emulation
+
+
+def overlay_values(c):
+    """Read both visible numbers from their rendered OBJ pixels."""
+    glyphs = (0x7B6F, 0x749A, 0x73E7, 0x79E7, 0x49ED, 0x79CF, 0x7BCF, 0x4927,
+              0x7BEF, 0x79EF, 0x5BEF, 0x3AEB, 0x724F, 0x3B6B, 0x73CF, 0x13CF)
+    values = []
+    for row in range(2):
+        value = 0
+        for digit in range(8):
+            glyph = 0
+            for y in range(5):
+                pixels = c.read(0x06017E00 + digit * 64 + row * 32 + (y + 1) * 4)
+                for x in range(3):
+                    if (pixels >> (8 + 4 * x)) & 15 == 1:
+                        glyph |= 1 << (y * 3 + x)
+            value = (value << 4) | glyphs.index(glyph)
+        values.append(value)
+    return tuple(values)
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("count", range(1, 7))
+def test_lr_reads_last_live_party_pid_for_every_party_size_and_restores_countdown(code, count):
+    from pokeldn.frlg.rom.rom_map import GPLAYER_PARTY, GPLAYER_PARTY_COUNT
+
+    c = Console(code, "articuno", criteria=Criteria(shiny=False))
+    assert c.profile["party"] == GPLAYER_PARTY
+    assert c.profile["party_count"] == GPLAYER_PARTY_COUNT
+    pids = (0x00123456, 0x89ABCDEF, 0xDEADBEEF, 0xA0000000, 0xFFFFFFFF, 0)
+    for slot, pid in enumerate(pids):
+        c.write(GPLAYER_PARTY + slot * 100, pid)
+    c.write(GPLAYER_PARTY_COUNT, 0xEFCDAB00 | count)  # Only the count byte is valid.
+    before = bytes(c.uc.mem_read(GPLAYER_PARTY, 600))
+    c.write(c.profile["main"] + 0x2C, 0x300, 2)
+    c.frame(3500)
+    assert overlay_values(c) == (pids[count - 1], count)
+    assert c.read(c.profile["palette"], 2) == 0x7FFF
+    assert c.s("index") == 3500
+    assert c.s("target") == 20000
+    c.write(c.profile["main"] + 0x2C, 0x100, 2)  # R alone restores normal display.
+    c.frame(3502)
+    assert overlay_values(c) == (c.s("seed"), c.s("shown"))
+    assert c.s("shown") == 0xB0016496
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    c.frame(3504)
+    assert overlay_values(c) == (c.s("seed"), c.s("shown"))
+    assert c.s("initial") == c.seed
+    assert bytes(c.uc.mem_read(GPLAYER_PARTY, 600)) == before
+    assert c.read(GPLAYER_PARTY_COUNT) == 0xEFCDAB00 | count
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("count", [0, 7, 255])
+def test_lr_empty_or_invalid_count_reads_no_party_entry(code, count):
+    from pokeldn.frlg.rom.rom_map import GPLAYER_PARTY_COUNT
+
+    c = Console(code, "articuno", criteria=Criteria(shiny=False))
+    c.write(GPLAYER_PARTY_COUNT, 0xBEEF0000 | count)
+    c.write(c.profile["main"] + 0x2C, 0x300, 2)
+    reads = []
+    c.uc.hook_add(UC_HOOK_MEM_READ, lambda uc, access, at, size, value, user: reads.append((at, size)),
+                  begin=0x02024000, end=0x0202B000)
+    c.frame(3500)
+    assert overlay_values(c) == (0xFFFFFFFF, 0)
+    assert reads == [(GPLAYER_PARTY_COUNT, 1)]
+    assert c.s("target") == 20000
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_lr_refreshes_pid_and_party_size_live_and_returns_to_l_view_when_r_is_released(code):
+    from pokeldn.frlg.rom.rom_map import GPLAYER_PARTY, GPLAYER_PARTY_COUNT
+
+    c = Console(code, "articuno", criteria=Criteria(shiny=False))
+    c.write(GPLAYER_PARTY_COUNT, 2, 1)
+    c.write(GPLAYER_PARTY, 0x11112222)
+    c.write(GPLAYER_PARTY + 100, 0xAABBCCDD)
+    c.write(c.profile["main"] + 0x2C, 0x300, 2)  # R + L: PID view.
+    c.frame(3500)
+    assert overlay_values(c) == (0xAABBCCDD, 2)
+    c.write(GPLAYER_PARTY + 100, 0x0000FFFF)
+    c.frame(3502)
+    assert overlay_values(c) == (0x0000FFFF, 2)
+    c.write(GPLAYER_PARTY_COUNT, 1, 1)
+    c.frame(3504)
+    assert overlay_values(c) == (0x11112222, 1)
+    c.write(c.profile["main"] + 0x2C, 0x200, 2)  # R released: existing L view.
+    c.frame(3506)
+    assert overlay_values(c) == (c.seed, 0x3506)
+    assert c.s("target") == 20000
+
+
+@pytest.mark.parametrize("code", PROFILES)
+@pytest.mark.parametrize("target", ["mewtwo", "articuno", "zapdos", "moltres"])
+def test_viewing_pid_does_not_pause_or_repeat_the_scheduled_a(code, target):
+    c = Console(code, target, criteria=Criteria(shiny=False))
+    c.write(c.profile["party_count"], 1, 1)
+    c.write(c.profile["party"], 0x10203040)
+    c.write(c.profile["main"] + 0x2C, 0x300, 2)
+    c.frame(3500)
+    c.frame(20000 - c.plan["auto_a_offset_advances"])
+    assert overlay_values(c) == (0x10203040, 1)
+    assert c.main_loop() == 1
+    assert c.presses[0][0] == c.lcg.advance(c.seed, 20000)
+    c.frame(20002)
+    assert overlay_values(c) == (0x10203040, 1)
+    assert c.main_loop() == 0
+    c.write(c.profile["main"] + 0x2C, 0, 2)
+    c.frame(20004)
+    assert overlay_values(c) == (c.s("seed"), 0xC0000000)
+    assert len(c.presses) == 1
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_lr_does_not_draw_over_a_menu(code):
+    c = Console(code, "articuno", criteria=Criteria(shiny=False))
+    c.frame(3500)
+    before = bytes(c.uc.mem_read(0x06017E00, 512))
+    c.set_overworld(False)
+    c.write(c.profile["main"] + 0x2C, 0x300, 2)
+    c.frame(3502)
+    assert bytes(c.uc.mem_read(0x06017E00, 512)) == before
 
 
 @pytest.mark.parametrize("code", PROFILES)
@@ -341,8 +464,11 @@ def test_birds_do_not_gate_a_on_controls_or_player_and_target_state(target, when
     assert len(c.presses) == 1
 
 
-def test_no_stores_to_rng_pokemon_save_blocks_or_rom():
+@pytest.mark.parametrize("held", [0, 0x100, 0x300])
+def test_no_stores_to_rng_pokemon_save_blocks_or_rom(held):
     c = Console(criteria=Criteria(shiny=False))
+    c.write(c.profile["party_count"], 6, 1)
+    c.write(c.profile["main"] + 0x2C, held, 2)
     c.frame(3500)
     c.frame(19999)
     c.main_loop()
@@ -439,13 +565,14 @@ def test_miss_reason_is_red_and_readable_for_sixty_map_frames_before_retry(code,
 
 
 @pytest.mark.parametrize("code", PROFILES)
-def test_holding_l_does_not_consume_a_miss_reason_hidden_by_the_seed_view(code):
+@pytest.mark.parametrize("held", [0x200, 0x300])
+def test_seed_and_pid_views_do_not_consume_a_hidden_miss_reason(code, held):
     c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
     c.frame(3500)
     c.frame(3502)
     c.frame(19999)
     assert c.s("shown") == 0xD0000009
-    c.write(c.profile["main"] + 0x2C, 0x200, 2)
+    c.write(c.profile["main"] + 0x2C, held, 2)
     for _ in range(90):
         c.frame(c.s("index") + 2)
         assert c.s("status") == 4
@@ -458,6 +585,19 @@ def test_holding_l_does_not_consume_a_miss_reason_hidden_by_the_seed_view(code):
     c.frame(c.s("index") + 2)
     assert c.s("shown") >> 28 in (0xA, 0xB)
     assert not c.presses
+
+
+@pytest.mark.parametrize("code", PROFILES)
+def test_r_alone_does_not_hide_or_pause_the_miss_notice(code):
+    c = Console(code, "articuno", criteria=Criteria(shiny=False), first=20000, last=21000)
+    c.frame(3500)
+    c.frame(19999)
+    notice = c.s("notice")
+    c.write(c.profile["main"] + 0x2C, 0x100, 2)
+    c.frame(20001)
+    assert c.s("notice") == notice - 1
+    assert overlay_values(c) == (c.s("seed"), 0xD0000009)
+    assert c.read(c.profile["palette"], 2) == 0x001F
 
 
 @pytest.mark.parametrize("code", PROFILES)

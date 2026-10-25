@@ -12,6 +12,7 @@ typedef void (*callback)(void);
 
 struct Config {
     u32 main, rng, sb2ptr, cb1, cb2, original, context, wait, objects, selected, seed_getter, palette;
+    u32 party, party_count;
     u32 first, last, jump_a, jump_c;
     u8 graphics, offset, shiny, nature, minimum[6], maximum[6];
 };
@@ -116,7 +117,15 @@ static u32 bcd(u32 n) {
  */
 __attribute__((noinline)) void tiles(void) {
     u32 values[2] = {S.seed, S.shown};
-    if (U16(C.main + 0x2C) & 0x200) {
+    u32 keys = U16(C.main + 0x2C);
+    if ((keys & 0x300) == 0x300) {
+        /* Pokemon starts with an unencrypted u32 PID; party entries are 100
+         * bytes. The count is a byte, and must be checked before indexing. */
+        u32 count = U8(C.party_count);
+        if (count > 6) count = 0;
+        values[0] = count ? U32(C.party + (count - 1) * 100) : 0xFFFFFFFF;
+        values[1] = count;
+    } else if (keys & 0x200) {
         values[0] = S.initial; values[1] = S.index < 10000000 ? bcd(S.index) : 0xFFFFFFFF;
     }
     for (u32 row = 0; row < 2; ++row) {
@@ -216,8 +225,9 @@ __attribute__((section(".entry"), used)) void hook(void) {
     else display = 15;
     S.shown = (display << 28) | bcd(n);
     if (U32(C.main + 4) == C.cb2) {
-        if (S.status == MISSED && S.notice && !(U16(C.main + 0x2C) & 0x200)) --S.notice;
-        u32 color = S.status == MISSED ? 0x001F
+        u32 keys = U16(C.main + 0x2C);
+        if (S.status == MISSED && S.notice && !(keys & 0x200)) --S.notice;
+        u32 color = (keys & 0x300) == 0x300 ? 0x7FFF : S.status == MISSED ? 0x001F
             : S.status == FOUND && S.locked
                 ? (reason || ((S.target - C.offset - S.index) & 1) ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;

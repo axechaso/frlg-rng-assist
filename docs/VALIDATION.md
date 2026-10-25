@@ -1,6 +1,12 @@
-# 0.3.7 validation record
+# 0.3.8 validation record
 
 Date: 2026-10-25. Status: **software checks completed; physical-console acceptance pending**.
+
+## Live tail PID display (0.3.8)
+
+Hold L+R on the map to show the full live party-tail PID in white and its position (1..6), with priority over L's initial-seed display. R alone leaves the normal display. The PID is the unencrypted first word of a 100-byte party record; the fixed party / count addresses are taken from the pinned host's rom_map.py. This reads the current party, not the copy saved to SaveBlock1, and does not decrypt or change the record. Count 0 or greater than 6 is rejected before indexing, with FFFFFFFF / 00000000 shown instead.
+
+Compiled-code checks decode both rows from the actual OBJ pixels across all four supported builds and all six party sizes, including leading zeros and PID 00000000 / FFFFFFFF. Independent host address fixtures populate the live records. Tests cover live PID / count changes, transitions between L+R, L, R alone and released keys, and memory-read boundaries for empty / invalid counts with nonzero adjacent bytes. The store-address allowlist is exercised while viewing. Viewing preserves hidden D notices and still sends one A at the exact predicted generation seed on every build / encounter; R alone does not hide or pause a visible D notice. Menu overlay suppression remains in place. These checks use synthetic memory and do not establish physical-console display reception or timing.
 
 ## D11 callback-phase correction (0.3.7)
 
@@ -47,7 +53,7 @@ The old synthetic ROM fixture used the production profile to place the getter, s
 
 ## Automated checks
 
-**399 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
+**469 tests passed.** The test suite executes the **actual compiled ARM/Thumb loader and resident code** in Unicorn against synthetic GBA memory. It also compares public host predictions, checks record conversion, and exercises CLI entry points and failure handling.
 
 Coverage includes:
 
@@ -69,7 +75,7 @@ Coverage includes:
 - A D reason stays red for 60 visible map frames with no input injection before retrying. TV-sized 312-call animation bursts plus the substitute VBlank's one call retain a future target and catch up exactly; an actual overrun waits until map return to display its reason. TV time and the held-L seed view cannot consume the notice. This models RNG consumption and scene transitions, not actual TV ROM execution.
 - Yellow / green countdown colours compare current advances to the automatic-A deadline, rather than the PID-generation index. Temporary parity changes never discard a visible B target.
 
-`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1880 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
+`python -m ruff check .` passes. The checked-in resident rebuild matches its source with GCC 15.2.1; resident size **1944 / 2200 bytes**, with each transfer payload at most **1024 bytes**.
 
 Windows' Unicorn native exception handler can generate first-chance diagnostics under pytest's faulthandler. The suite disables only that diagnostic plugin; emulation exceptions, instruction limits, return addresses and all assertions remain active.
 
