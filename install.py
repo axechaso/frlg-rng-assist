@@ -32,7 +32,7 @@ def build_parser():
     parser.add_argument("--iv-min", type=ivs, default=(0, 0, 0, 0, 0, 0))
     parser.add_argument("--iv-max", type=ivs, default=(31, 31, 31, 31, 31, 31))
     parser.add_argument("--allow-normal", action="store_true", help="也接受非闪光；适合首轮按 A 测试")
-    parser.add_argument("--capture", action="store_true", help="预载捕获搜索；生成后用 R+SELECT 启动 / 取消")
+    parser.add_argument("--capture-rng", dest="capture", action="store_true", help="预载捕获搜索；生成后用 R+SELECT 启动 / 取消")
     parser.add_argument("--capture-offset", type=int, default=241, help="投球至首次摇球判定前的 advances，独立于生成 Offset")
     parser.add_argument("--capture-offset-max", type=int, help="偏移带上限；留空等于下限，全部可能起点均须成功")
     parser.add_argument("--preview", action="store_true", help="仅导出真实安装配置，不连接掌机")

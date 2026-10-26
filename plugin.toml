@@ -1,6 +1,6 @@
 id = "frlg-rng-assist"
 name = "FRLG RNG Assist"
-version = "0.7.0"
+version = "0.7.1"
 api = "1.11"
 author = "axechaso"
 description = "FRLG RNG · 中文 / 日本語 / English · species + IV filters · timed encounter / capture input · manual PID lookup."

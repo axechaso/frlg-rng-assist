@@ -64,7 +64,8 @@ def check_localized_species_forms(plugin, plugin_root, work):
     from pokeldn.app import command, i18n
     from install import build_parser, main as install_main
 
-    settings = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
+    # The host owns --capture <logfile>; the plugin must not advertise that flag.
+    settings = SimpleNamespace(received="", keys="", capture=True, language=2, gender=0,
                                ids=lambda game: (12345, 2791), name=lambda game: "TEST")
     original = i18n.locale
     gifts = []
@@ -77,7 +78,7 @@ def check_localized_species_forms(plugin, plugin_root, work):
             tool = replace(tools[0], script=str(plugin_root / "install.py"))
             values = {"--category": "wild", "--target-wild": "sweet-land", "--location": "viridian-forest",
                       "--species": "25", "--nature": "15", "--iv-min": "20,0,0,0,0,20", "--preview": True,
-                      "--capture": True, "--capture-offset": "242", "--capture-offset-max": "245",
+                      "--capture-rng": True, "--capture-offset": "242", "--capture-offset-max": "245",
                       "--output": str(work / f"localized-{language}.json")}
             assert not command.problems(tool, values)
             argv = command.build(tool, values, {}, settings)

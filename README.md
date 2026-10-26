@@ -1,4 +1,4 @@
-# FRLG RNG Assist 0.7.0
+# FRLG RNG Assist 0.7.1
 
 PokeLDN 独立第三方插件。设置 RNG advances 范围和条件，掌机显示 seed / 倒计时，到点触发一次按键。你自行到最后决定点；**凤王按 ↑，其余目标按 A**，无需按住 B。
 
@@ -6,7 +6,7 @@ PokeLDN 独立第三方插件。设置 RNG advances 范围和条件，掌机显�
 
 ## 安装与界面
 
-使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.7.0.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
+使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.7.1.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
 
 工具名称、说明、分类、地点、物种、性格和输出支持**中文 / 日本語 / English**，跟随 PokeLDN 的 App language。更改宿主语言后重启 PokeLDN 重新载入插件；其他界面语言回退到英文。中文 / 日文宿主需要对应的 PokeLDN 语言包。这是界面翻译，游戏支持范围仍为上述英文 / 法文构建。安装卡片的简介为三语共用文本。
 
@@ -120,7 +120,7 @@ D 原因码：04 回调不可用或改变；09 越过按键时机；10 主循环
     python -m ruff check .
     python -m pytest -q
     python scripts/build_guest.py --check
-    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.0.pokeplugin
+    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.1.pokeplugin
 
 重新编译时设置 ARM_TOOLCHAIN 为带末尾分隔符的 ARM 工具目录，运行 scripts/build_guest.py。驻留区仍为 2200 字节：未预载捕获为 2156；预载后的定点 / 野生 / 未知图腾分别为 2032 / 2180 / 2196。安装时按模型选取一个完整版本；不能叠加其他 resident hooks。初始化后复用 first / 初始跳转参数三个 RAM 字作为临时状态，不扩大保留区。物种仍编码为 100 位槽位掩码。插件不写 RNG、宝可梦、存档或 ROM；游戏的解密访问器只接收栈副本。
 

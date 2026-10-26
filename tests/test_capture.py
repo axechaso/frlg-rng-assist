@@ -265,18 +265,23 @@ def test_capture_stops_at_the_absolute_tracking_limit():
 
 
 @pytest.mark.parametrize("language", ["zh", "ja", "en"])
-def test_capture_fields_work_with_real_host_command_builder(monkeypatch, language, tmp_path):
+@pytest.mark.parametrize("logging", [False, True])
+def test_capture_fields_work_with_real_host_command_builder(monkeypatch, language, logging, tmp_path):
     from pokeldn.app import command, i18n
     monkeypatch.setattr(i18n, "locale", lambda: language)
     tools = []
     plugin.register(SimpleNamespace(add_tool=lambda game, tool: tools.append(tool)))
     tool = replace(tools[0], script=str(Path(install.__file__)))
-    values = {"--capture": True, "--capture-offset": "242", "--capture-offset-max": "245"}
+    values = {"--capture-rng": True, "--capture-offset": "242", "--capture-offset-max": "245"}
     assert command.applies(next(f for f in tool.fields if f.flag == "--capture-offset"), tool, values)
-    host = SimpleNamespace(received="", keys="", capture=False, language=2, gender=0,
+    host = SimpleNamespace(received="", keys="", capture=logging, language=2, gender=0,
                            ids=lambda game: (12345, 2791), name=lambda game: "TEST")
     assert not command.problems(tool, values)
-    args = install.build_parser().parse_args(command.build(tool, values, {}, host))
+    argv = command.build(tool, values, {}, host)
+    assert "--capture" not in argv  # Reserved by the host for a capture log filename.
+    args = install.build_parser().parse_args(argv)
     assert args.capture and (args.capture_offset, args.capture_offset_max) == (242, 245)
-    values["--capture"] = False
+    values["--capture-rng"] = False
     assert not command.applies(next(f for f in tool.fields if f.flag == "--capture-offset"), tool, values)
+    args = install.build_parser().parse_args(command.build(tool, values, {}, host))
+    assert not args.capture

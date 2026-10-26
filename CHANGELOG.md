@@ -1,5 +1,9 @@
 # Changes
 
+## 0.7.1 — 2026-10-26
+
+- Use `--capture-rng` for the plugin's preloaded capture search, keeping PokeLDN's `--capture <logfile>` separate. The installer now starts correctly with the host's session-recording setting on or off. Test both settings through the real command builder in all three languages.
+
 ## 0.7.0 — 2026-10-26
 
 - Preload capture RNG with the encounter search. After its one generation input, R+SELECT starts capture at the player's final ball Use confirmation, without leaving battle, reinstalling or reseeding. The same chord cancels; a held chord does not restart. Capture always sends one A, including after Ho-Oh's UP generation input.
