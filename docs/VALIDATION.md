@@ -1,4 +1,18 @@
-# 0.6.0 validation record
+# 0.7.0 validation record
+
+Date: 2026-10-26. **1051 pytest cases passed in 99.84 s; Ruff, GCC 15.2.1 guest reproduction and the official frozen v0.39.1 host checks passed. Physical-console capture acceptance remains pending.**
+
+The 80 capture checks include the supplied v27g legacy success vector (CA532E6A / 242..245 / threshold 16643), the game's integer minimum threshold, strict failure on equality, independent four-roll checks at every offset versus the combined band, input validation, and inclusive offline search. They execute all four address profiles with zero / nominal / band offsets, generation followed by capture without reinstalling or reseeding, one-shot input, cancellation and rearming, held-key edge behavior, red miss notices and retry, invalid epoch refusal, Ho-Oh's UP-to-A transition and absolute-range exhaustion. Specialized wild / Unown code is exercised for H1/H2/H4 with exact nature / six IV constraints before switching to the capture predicate. Store-address checks cover the callback2 input path while preserving RNG, Pokemon, saves and ROM.
+
+The ordinary resident is **2156 bytes**; capture-enabled static / wild / Unown residents are **2032 / 2180 / 2196 bytes**, all in the unchanged 0x0203F768..0x02040000 reservation. First / bootstrap affine words become callback-slot / scene / resumable-work scratch only after initialization. Three-pixel row expansion and aligned 32-bit OAM attribute writes retain the existing glyphs and sprite slots. Prior IV / Hidden Power / PID pages, palette parity, protected-store, species, loader integrity, epoch and retry checks remain in the full passing run. Every gift transfer remains within 1024 bytes.
+
+The official frozen v0.39.1 Windows host, extracted from its release artifact, read and installed the 41-file 0.7.0 package into isolated temporary data. Checks assert the frozen runtime and bundled host version, archive exclusions, all guest hashes / RAM bounds and source hashes; `--module pokeldn --plugins` reports API 1.11 and the plugin loaded. Its actual form builder exercised all category / method / location controls, three-language previews with species / nature / IV filters and capture offsets 242..245, identical gifts across locales and manual PID lookup. Seven real offline gift exports cover static, wild and Unown capture variants on both games; stderr is empty and the completed smoke report is `passed`. Evidence is under ignored `dist/packed-070-*.log`.
+
+These checks execute compiled ARM code with substituted game callbacks and use the real frozen host offline. They do not execute the full retail ROM, connect a board, render the native GUI, prove battle VRAM allocation, measure a physical ball's callback delay or establish this plugin's catch success rate. The supplied Python model's user-reported hardware validation is retained as separate evidence; **241 and the original SysBot's 242..245 are not certified plugin offsets**. Follow the ordinary-round then shiny-round acceptance steps in HARDWARE_TEST_ZH.md.
+
+The records below describe earlier releases.
+
+## 0.6.0 validation record
 
 Date: 2026-10-25. **971 pytest cases passed in 124.73 s; Ruff and GCC 15.2.1 guest reproduction passed. Physical-console acceptance remains pending.**
 

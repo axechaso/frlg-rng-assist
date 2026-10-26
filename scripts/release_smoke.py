@@ -77,15 +77,18 @@ def check_localized_species_forms(plugin, plugin_root, work):
             tool = replace(tools[0], script=str(plugin_root / "install.py"))
             values = {"--category": "wild", "--target-wild": "sweet-land", "--location": "viridian-forest",
                       "--species": "25", "--nature": "15", "--iv-min": "20,0,0,0,0,20", "--preview": True,
+                      "--capture": True, "--capture-offset": "242", "--capture-offset-max": "245",
                       "--output": str(work / f"localized-{language}.json")}
             assert not command.problems(tool, values)
             argv = command.build(tool, values, {}, settings)
             parsed = normalize_selection(build_parser().parse_args(argv))
             assert (parsed.ui_language, parsed.species, parsed.nature) == (language, 25, 15)
             assert parsed.iv_min == (20, 0, 0, 0, 0, 20)
+            assert parsed.capture and (parsed.capture_offset, parsed.capture_offset_max) == (242, 245)
             assert install_main(argv) == 0
             result = json.loads(Path(values["--output"]).read_text(encoding="utf-8"))
             assert result["wild_species"] == 25
+            assert result["capture"]["enabled"] and result["capture"]["threshold"] == 16643
             gifts.append(Path(result["gift"]["path"]).read_bytes())
         assert gifts[0] == gifts[1] == gifts[2]
     finally:
@@ -155,11 +158,12 @@ def main():
         ("firered", "deoxys", "other", 0), ("leafgreen", "sweet-land", "viridian-forest", 25),
         ("firered", "fish-super", "safari-zone-center", 147),
         ("leafgreen", "sweet-surf", "safari-zone-center", 79),
+        ("firered", "unown", "other", 0),
     ):
         plan = install_plan(
             game, "auto", target, criteria=Criteria(shiny=False),
             offset=3 if target == "articuno" else None,
-            location=location, species=species,
+            location=location, species=species, capture=True, capture_offset=242, capture_offset_max=245,
         )
         assert plan["offset_advances"] == default_offset(target, game, location)
         gift = work / f"{game}-{target}.pokegift"

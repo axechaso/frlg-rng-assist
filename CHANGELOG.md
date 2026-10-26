@@ -1,5 +1,13 @@
 # Changes
 
+## 0.7.0 — 2026-10-26
+
+- Preload capture RNG with the encounter search. After its one generation input, R+SELECT starts capture at the player's final ball Use confirmation, without leaving battle, reinstalling or reseeding. The same chord cancels; a held chord does not restart. Capture always sends one A, including after Ho-Oh's UP generation input.
+- Port the supplied v24 / v27g capture-band predicate with fixed minimum threshold 16643. Require all four strict comparisons at every possible offset. Keep capture offsets separate from generation filters and offsets; 241 is an unverified native-input reference, not a copied SysBot timing certification.
+- Show capture search / countdown as 8 / 9. Retain the visible red miss notice and retry, callback / RFU recheck, one-shot input, initial-seed tracking, R IV / Hidden Power and L+R PID pages. Search after arming can continue beyond the original generation range, up to absolute advance 9999999.
+- Compile separate capture-enabled static, wild and Unown images, selected at installation. Reuse dead bootstrap configuration words as scratch and compact pixel / OAM writes; preserve the verified 2200-byte reservation. Images are 2156 bytes without capture and 2032 / 2180 / 2196 with capture. Physical-console capture timing remains pending.
+- Translate the new controls, instructions and reports into Chinese, Japanese and English. Keep exactly two registered tools and distribute through the independent plugin repository.
+
 ## 0.6.0 — 2026-10-25
 
 - Add wild species selection using 132 versioned FRLG encounter tables, exact floors / zones, surf / Rock Smash and individual rod slots. Encode the selected species' 100 percentile-roll buckets for filtering in the compiled resident before PID rejection. Invalid game / location / type combinations fail before gift creation; Any preserves previous behavior. Unown keeps its separate letter model.

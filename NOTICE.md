@@ -47,6 +47,16 @@ separately attributed here.
 
 Source references:
 
+- Version 0.7.0's fixed-threshold capture-band predicate follows the user-supplied
+  `FRLGSwitchSeedFarmer/frlg_capture_engine_v24.py` (`check_capture_band`) and
+  `frlg_easycon_capture_calibrator_v27g.py` (`verify_band`), supplied under GPL-3.0.
+  Provenance hashes, the retained legacy vector and the independent native-input
+  timing boundary are recorded in `docs/CAPTURE_MODEL.md`. The plugin keeps the
+  combined work under AGPL-3.0-or-later; the supplied source's GPL text is included
+  as `licenses/FRLGSwitchSeedFarmer-GPL-3.0.txt`. No SysBot client, credentials,
+  logs, calibration records or complete source tool is bundled.
+- [Capture's integer threshold and four Random checks](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/battle_script_commands.c).
+
 - [Ten Lines static target categories](https://github.com/lincoln-lm/ten-lines/blob/main/src/components/StaticEncounterSelector.tsx)
   and [wild category / location selector](https://github.com/lincoln-lm/ten-lines/blob/main/src/components/WildEncounterSelector.tsx)
   inform the selection layout. No Ten Lines program code or encounter tables are bundled.

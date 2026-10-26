@@ -24,7 +24,7 @@ PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
 STATES = ("initial", "seed", "index", "cursor", "next", "target", "shown",
-          "call_slot", "call_original", "call_context", "work_cursor")
+          "call_original")
 STATE_BYTES = ("status", "reason", "notice", "work_active")
 # Pinned host address facts, independently of the config word under test.
 MON_DATA = {"BPRE": 0x08043390, "BPGE": 0x08043390, "BPRF": 0x080432E4, "BPGF": 0x080432E4}
@@ -46,8 +46,11 @@ class Console:
         chamber="monean",
         location="other",
         species=0,
+        capture=False,
+        capture_offset=241,
+        capture_offset_max=None,
     ):
-        self.code, self.profile, self.manifest = code, PROFILES[code], guest()
+        self.code, self.profile = code, PROFILES[code]
         self.plan = install_plan(
             "firered" if code.startswith("BPR") else "leafgreen",
             code,
@@ -60,7 +63,11 @@ class Console:
             chamber=chamber,
             location=location,
             species=species,
+            capture=capture,
+            capture_offset=capture_offset,
+            capture_offset_max=capture_offset_max,
         )
+        self.manifest = guest(self.plan)
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
         for base, size in (
             (0x02000000, 0x40000),
@@ -95,7 +102,7 @@ class Console:
         self.presses = []
         self.inputs = []
         self.input_keys = []
-        self.input_addresses = (self.profile["cb1"] & ~1, 0x0807C418)
+        self.input_addresses = (self.profile["cb1"] & ~1, 0x0807C418, self.profile["battle_cb2"] & ~1)
         self.phases = []
         self.mon_reads = []
         self.writes = []
@@ -132,8 +139,11 @@ class Console:
                 uc.mem_write(at + 19, bytes((raw[19] | 1,)))
             misc = (3, 2, 3, 2, 1, 1) * 3 + (0,) * 6
             uc.reg_write(a.UC_ARM_REG_R0, 0 if bad else words[misc[pid % 24] * 3 + 1] & 0x3FFFFFFF)
-        if (address in self.input_addresses
-                and self.read(self.profile["main"] + 0x2E, 2) & self.plan["trigger_key_mask"]):
+        if address not in self.input_addresses:
+            return
+        capture_phase = self.read(self.manifest["symbols"]["config"] + 78, 1) == 2
+        trigger = 1 if capture_phase else self.plan["trigger_key_mask"]
+        if self.read(self.profile["main"] + 0x2E, 2) & trigger:
             self.inputs.append((address, self.read(self.profile["rng"])))
             self.input_keys.append((self.read(self.profile["main"] + 0x2C, 2),
                                     self.read(self.profile["main"] + 0x2E, 2)))
@@ -141,7 +151,7 @@ class Console:
             # Forecast script completion from explicit per-pass yields, not a
             # configured number of immediate generation draws. main_loop has
             # already applied the first RFU draw; the trace starts before it.
-            if self.plan["target"] in ("mewtwo", "articuno", "zapdos", "moltres"):
+            if not capture_phase and self.plan["target"] in ("mewtwo", "articuno", "zapdos", "moltres"):
                 post_vblank = self.lcg.advance(self.read(self.profile["rng"]), 0xFFFFFFFF)
                 seed, _ = generation_trace(post_vblank, self.plan["target"], self.lcg)
                 self.presses.append((seed, predict(seed, 12345, 2791)))
@@ -160,8 +170,12 @@ class Console:
 
     def s(self, name, value=None):
         base = self.manifest["symbols"]["state"]
-        at, size = ((base + STATE_BYTES.index(name), 1) if name in STATE_BYTES
-                    else (base + 4 + STATES.index(name) * 4, 4))
+        scratch = {"call_slot": 48, "call_context": 60, "work_cursor": 56}
+        if name in scratch:
+            at, size = self.manifest["symbols"]["config"] + scratch[name], 4
+        else:
+            at, size = ((base + STATE_BYTES.index(name), 1) if name in STATE_BYTES
+                        else (base + 4 + STATES.index(name) * 4, 4))
         if value is not None:
             self.write(at, value, size)
         return self.read(at, size)

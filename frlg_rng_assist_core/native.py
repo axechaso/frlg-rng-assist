@@ -8,6 +8,7 @@ import struct
 
 from .backend import backend, bounded
 from .model import Criteria
+from .capture import settings as capture_settings
 from .wild_tables import species_mask
 from .encounters import (
     BASE_PRESS_OFFSETS, ENCOUNTERS, UNOWN_CHAMBERS, WILD_LOCATIONS, allowed_methods,
@@ -90,7 +91,8 @@ def validate_context(game, build, target):
 
 
 def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None,
-                 method=1, chamber="monean", location="other", species=0):
+                 method=1, chamber="monean", location="other", species=0,
+                 capture=False, capture_offset=241, capture_offset_max=None):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -145,15 +147,20 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         "volatile": True,
         "result_verified": False,
         "hardware_tested": False,
+        "capture": capture_settings(capture, capture_offset, capture_offset_max),
     }
 
 
-def guest():
-    return json.loads(Path(__file__).with_name("guest.json").read_text(encoding="utf-8"))
+def guest(plan=None):
+    manifest = json.loads(Path(__file__).with_name("guest.json").read_text(encoding="utf-8"))
+    if plan and plan["capture"]["enabled"]:
+        variant = manifest["capture_variants"][plan["model"]]
+        return {**variant, "loader": manifest["loader"]}
+    return manifest
 
 
 def resident(plan, code):
-    manifest = guest()
+    manifest = guest(plan)
     blob = bytearray.fromhex(manifest["hex"])
     if hashlib.sha256(blob).hexdigest() != manifest["sha256"]:
         raise ValueError("插件的掌机端代码 SHA-256 不符，请重新安装插件")
@@ -187,6 +194,12 @@ def resident(plan, code):
         *(UNOWN_CHAMBERS[plan["chamber"]] + (0,) if encounter.model == "unown"
           else bytes.fromhex(plan["slot_roll_mask"])),
     )
+    if plan["capture"]["enabled"]:
+        capture = plan["capture"]
+        increment = lcg.advance(0, capture["offset_min"] + 2)
+        multiplier = (lcg.advance(1, capture["offset_min"] + 2) - increment) & 0xFFFFFFFF
+        settings += struct.pack("<BHII", capture["offset_max"] - capture["offset_min"] + 1,
+                                capture["offset_min"] + 1, multiplier, increment)
     at = manifest["symbols"]["config"] - manifest["base"]
     blob[at : at + len(settings)] = settings
     if len(blob) != manifest["length"] or manifest["base"] + len(blob) > 0x02040000:
@@ -202,7 +215,7 @@ def fnv1a(data):
 
 
 def payloads(plan, code):
-    manifest, profile = guest(), PROFILES[code]
+    manifest, profile = guest(plan), PROFILES[code]
     image = resident(plan, code)
     loader = bytes.fromhex(manifest["loader"]["hex"])
     chunk_size = ((1024 - len(loader)) // 4) * 4
@@ -271,7 +284,7 @@ def write_gift(plan, path):
         "path": str(path),
         "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
         "builds": codes,
-        "resident_bytes": guest()["length"],
+        "resident_bytes": guest(plan)["length"],
     }
 
 

@@ -9,12 +9,24 @@ typedef void (*callback)(void);
 #define U32(a) (*(volatile u32 *)(a))
 #define U16(a) (*(volatile u16 *)(a))
 #define U8(a) (*(volatile u8 *)(a))
+#ifndef WITH_CAPTURE
+#define WITH_CAPTURE 0
+#endif
+#ifndef GUEST_MODEL
+#define GUEST_MODEL -1
+#endif
+#define MODEL (GUEST_MODEL < 0 ? C.model : GUEST_MODEL)
 
 struct Config {
     u32 main, rng, sb2ptr, cb1, cb2, original, seed_getter, palette, party, party_count, battle_cb2, mon_data;
     u32 first, last, jump_a, jump_c, offset_a, offset_c;
     u16 offset;
     u8 model, method, shiny, nature, menus, button, minimum[6], maximum[6], letters[13];
+#if WITH_CAPTURE
+    u8 capture; /* enabled + offset width; menus == 2 selects the capture phase */
+    u16 catch_offset; /* Host offset plus the main-loop RFU draw. */
+    u32 catch_a, catch_c;
+#endif
 };
 __attribute__((section(".config"), used)) struct Config config = {0};
 enum { WAIT, SEARCH, FOUND, EXHAUSTED, MISSED, DESYNC, PENDING, FIRED };
@@ -24,16 +36,22 @@ enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIR
  * entry barriers below keep ordinary RAM snapshots on their callback boundary. */
 struct State { u8 status, reason, notice, work_active;
     u32 initial, seed, index, cursor, next, target, shown;
-    u32 call_slot, call_original, call_context, work_cursor;
+    u32 call_original;
 };
 __attribute__((section(".state"), used)) struct State state = {0};
 #define C config
 #define S state
+/* Bootstrap's first / affine jump words are dead after WAIT. Reuse that RAM
+ * for the wrapped slot, its scene snapshot, and resumable candidate work. */
+#define CALL_SLOT C.first
+#define CALL_CONTEXT C.jump_c
+#define WORK_CURSOR C.jump_a
 
 static u32 step(u32 v) { return v * 0x41C64E6D + 0x6073; }
 
 static void miss(u32 reason) {
-    S.reason = reason; S.notice = 60; S.status = MISSED;
+    /* Discard partial candidate work along with the missed deadline. */
+    U32((u32)&S) = MISSED | (reason << 8) | (60 << 16);
 }
 
 /* Exact distance for this full-period LCG, one binary bit per iteration. */
@@ -54,7 +72,11 @@ static int overworld(void) { return U32(C.main) == C.cb1 && U32(C.main + 4) == C
  * Menu tools wrap callback2, because a party menu has no overworld callback1. */
 __attribute__((noinline)) u32 readiness(void) {
     u32 cb = U32(C.main + 4);
-    return overworld() || (C.menus && cb && cb != C.battle_cb2) ? 0 : NOT_OVERWORLD;
+    return overworld() || (C.menus && cb && (
+#if WITH_CAPTURE
+        C.menus == 2 ||
+#endif
+        cb != C.battle_cb2)) ? 0 : NOT_OVERWORLD;
 }
 
 /* Runs after ReadKeys and HandleLinkConnection, exactly once. RfuMain1 draws
@@ -66,10 +88,10 @@ __attribute__((noinline)) void press_shim(void) {
     __asm__ volatile ("" ::: "memory");
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
-    U32(S.call_slot) = S.call_original;
+    U32(CALL_SLOT) = S.call_original;
     if (S.status == PENDING) {
         u32 reason = U32(C.rng) != step(S.seed) ? RNG_CHANGED
-            : U32(C.main + 4) != S.call_context ? NOT_OVERWORLD : readiness();
+            : U32(C.main + 4) != CALL_CONTEXT ? NOT_OVERWORLD : readiness();
         if (!reason) {
             S.status = FIRED;
             /* Walking consumes heldKeys; menu / script confirmation uses newKeys.
@@ -91,13 +113,25 @@ static u32 nature_of(u32 lo, u32 hi) {
 
 __attribute__((noinline)) int matches(u32 seed) {
     u32 a, lo, hi;
-    if (C.model) {
+#if WITH_CAPTURE
+    if (C.menus == 2) {
+        /* The union of four draws at EVERY possible offset, as in the user's
+         * v24 / v27g verified model. Strict <, fixed minimum threshold. */
+        u32 draws = C.capture + 3;
+        do {
+            seed = step(seed);
+            if (seed >> 16 >= 16643) return 0;
+        } while (--draws);
+        return 1;
+    }
+#endif
+    if (MODEL) {
         if (!S.work_active) {
             a = step(seed);
             u32 n = a >> 16;
             n -= ((n * 5242) >> 19) * 100;
             while (n >= 100) n -= 100;
-            if (C.model == 2) {
+            if (MODEL == 2) {
                 static const u8 ends[11] = {20, 40, 50, 60, 70, 80, 85, 90, 94, 98, 99};
                 u32 slot = 0;
                 while (slot < 11 && n >= ends[slot]) ++slot;
@@ -112,22 +146,22 @@ __attribute__((noinline)) int matches(u32 seed) {
                 if (C.nature != 255 && wanted != C.nature) return 0;
                 S.work_active = wanted + 1;
             }
-            S.work_cursor = a;
+            WORK_CURSOR = a;
         }
-        a = S.work_cursor;
+        a = WORK_CURSOR;
         /* Resume difficult candidates next VBlank instead of an unbounded IRQ loop. */
         for (u32 count = 0; count < 8; ++count) {
             a = step(a); lo = a >> 16;
             a = step(a); hi = a >> 16;
-            if (C.model == 2) { u32 t = lo; lo = hi; hi = t; }
+            if (MODEL == 2) { u32 t = lo; lo = hi; hi = t; }
             u32 n = nature_of(lo, hi);
-            if (C.model == 2) {
+            if (MODEL == 2) {
                 n = (lo & 3) | ((lo >> 6) & 12) | ((hi << 4) & 48) | ((hi >> 2) & 192);
                 while (n >= 28) n -= 28;
             }
             if (n + 1 == S.work_active) { S.work_active = 0; goto rolled; }
         }
-        S.work_cursor = a;
+        WORK_CURSOR = a;
         return -1;
     }
     a = step(seed); lo = a >> 16;
@@ -155,12 +189,13 @@ static const u16 font[16] = {0x7B6F, 0x749A, 0x73E7, 0x79E7, 0x49ED, 0x79CF, 0x7
     0x7BEF, 0x79EF, 0x5BEF, 0x3AEB, 0x724F, 0x3B6B, 0x73CF, 0x13CF};
 static u32 bcd(u32 n) {
     u32 result = 0;
-    for (u32 i = 0; i < 24; ++i) {
+    u32 count = 24;
+    do {
         u32 carry = (result + 0x33333333) & 0x88888888;
         result += (carry >> 2) | (carry >> 3);
         result = (result << 1) | ((n >> 23) & 1);
         n <<= 1;
-    }
+    } while (--count);
     return result;
 }
 
@@ -210,9 +245,7 @@ __attribute__((noinline)) void tiles(u32 keys) {
             tile[0] = tile[6] = tile[7] = 0x22222222;
             for (u32 y = 1; y < 6; ++y) {
                 u32 pixels = 0x22222222;
-                pixels -= (bits & 1) << 8;
-                pixels -= (bits & 2) << 11;
-                pixels -= (bits & 4) << 14;
+                pixels -= (((bits & 7) * 0x49) & 0x111) << 8;
                 bits >>= 3;
                 tile[y] = pixels;
             }
@@ -221,12 +254,14 @@ __attribute__((noinline)) void tiles(u32 keys) {
     }
 }
 
+
+
 __attribute__((section(".entry"), used)) void hook(void) {
     __asm__ volatile ("" ::: "memory");
     u32 idle = !(U16(C.main + 0x1C) & 1);
     /* A second interrupt before callback1 means the pending press has expired. */
     if (S.status == PENDING) {
-        if (U32(S.call_slot) == (u32)press_shim) U32(S.call_slot) = S.call_original;
+        if (U32(CALL_SLOT) == (u32)press_shim) U32(CALL_SLOT) = S.call_original;
         miss(EXPIRED);
     }
     ((callback)C.original)();
@@ -243,6 +278,22 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 delta = index - S.index;
     if (index < S.index || index > 9999999 || S.initial != initial) S.status = DESYNC;
     S.index = index;
+#if WITH_CAPTURE
+    /* A new SELECT while R is held arms capture AFTER the generation input.
+     * It is a toggle, so the player can cancel without leaving the battle.
+     * ReadKeys owns newKeys; a held chord cannot repeatedly arm the search. */
+    if (S.status != DESYNC && (S.status == FIRED || C.menus == 2)
+            && (U32(C.main + 0x2C) & 0x00040104) == 0x00040104) {
+        if (S.status != FIRED && S.status != EXHAUSTED) S.status = EXHAUSTED;
+        else {
+            C.menus = 2; C.button = 1;
+            C.offset = C.catch_offset;
+            C.last = 9999999;
+            C.offset_a = C.catch_a; C.offset_c = C.catch_c;
+            S.next = 0; S.work_active = 0; S.status = SEARCH;
+        }
+    }
+#endif
     u32 reason = readiness();
     u32 stable = idle && delta == 2 && !reason;
     /* Keep the reason visible for 60 eligible frames before looking ahead again.
@@ -259,9 +310,9 @@ __attribute__((section(".entry"), used)) void hook(void) {
         if (S.index > press) miss(PASSED);
         else if (S.index == press) {
             if (idle && !reason) {
-                S.call_slot = C.main + (overworld() ? 0 : 4);
-                S.call_original = U32(S.call_slot); S.call_context = U32(C.main + 4);
-                S.status = PENDING; U32(S.call_slot) = (u32)press_shim;
+                CALL_SLOT = C.main + (overworld() ? 0 : 4);
+                S.call_original = U32(CALL_SLOT); CALL_CONTEXT = U32(C.main + 4);
+                S.status = PENDING; U32(CALL_SLOT) = (u32)press_shim;
             }
             else miss(idle ? reason : LAG);
         }
@@ -292,7 +343,12 @@ __attribute__((section(".entry"), used)) void hook(void) {
     }
     else if (display == MISSED) n = S.reason;
     else n = display == PENDING;
-    display = (0xCCFDEBAF >> (display * 4)) & 15;
+#if WITH_CAPTURE
+    u32 digits = C.menus == 2 ? 0xCCFDE98F : 0xCCFDEBAF;
+#else
+    u32 digits = 0xCCFDEBAF;
+#endif
+    display = (digits >> (display * 4)) & 15;
     S.shown = (display << 28) | bcd(n);
     if (!reason) {
         /* Original VBlank has copied the game's OAM. Patch the final eight
@@ -300,13 +356,13 @@ __attribute__((section(".entry"), used)) void hook(void) {
          * same VBlank window in which we update palette and OBJ tiles. */
         for (u32 i = 0; i < 8; ++i) {
             u32 oam = 0x070003C0 + i * 8;
-            U16(oam) = 0x8002; U16(oam + 2) = 174 + i * 8; U16(oam + 4) = 0xF3F0 + i * 2;
+            U32(oam) = 0x00AE8002 + (i << 19); U16(oam + 4) = 0xF3F0 + i * 2;
         }
         u32 keys = U16(C.main + 0x2C);
         if (S.status == MISSED && S.notice && !(keys & 0x300)) --S.notice;
         u32 color = keys & 0x100 ? 0x7FFF : S.status == MISSED ? 0x001F
             : S.status == FOUND
-                ? (reason || ((S.target - C.offset - S.index) & 1) ? 0x02FF : 0x03E0) : 0x7FFF;
+                ? (S.shown & 1 ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;
         U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
         tiles(keys);

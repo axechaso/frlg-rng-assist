@@ -32,6 +32,9 @@ def build_parser():
     parser.add_argument("--iv-min", type=ivs, default=(0, 0, 0, 0, 0, 0))
     parser.add_argument("--iv-max", type=ivs, default=(31, 31, 31, 31, 31, 31))
     parser.add_argument("--allow-normal", action="store_true", help="也接受非闪光；适合首轮按 A 测试")
+    parser.add_argument("--capture", action="store_true", help="预载捕获搜索；生成后用 R+SELECT 启动 / 取消")
+    parser.add_argument("--capture-offset", type=int, default=241, help="投球至首次摇球判定前的 advances，独立于生成 Offset")
+    parser.add_argument("--capture-offset-max", type=int, help="偏移带上限；留空等于下限，全部可能起点均须成功")
     parser.add_argument("--preview", action="store_true", help="仅导出真实安装配置，不连接掌机")
     return parser
 
@@ -45,6 +48,7 @@ def main(argv=None):
         plan = install_plan(
             args.game, args.build, args.target, first=args.start, last=args.end, criteria=criteria,
             offset=args.offset, method=args.method, chamber=args.chamber, location=args.location, species=args.species,
+            capture=args.capture, capture_offset=args.capture_offset, capture_offset_max=args.capture_offset_max,
         )
         if not args.preview and not args.enable_auto_a:
             raise ValueError("请勾选「安装并启用到点按键」；只检查配置可选择「仅预览」。")
@@ -91,7 +95,13 @@ def main(argv=None):
                 print(tr("此 Offset 是参考预设，尚未在这个决定点做实机校准；先允许非闪光测试实际 PID。"))
             print(tr("C0000001=等待注入，C0000000=已注入 {button}；是否实际触发仍须观察。", button=button))
             print(tr("黄色表示按键时机奇偶不符，绿色表示一致；错过后红色 D 保留约 1 秒再续搜。C 已发按键，E 范围耗尽，F 计数失效。"))
-            print(tr("续搜保留初始 seed 和筛选条件，不补按旧目标。发送一次按键后结束；E=范围耗尽，F=计数失效，也会结束。"))
+            if plan["capture"]["enabled"]:
+                print(tr("已预载捕获搜索：出闪后停在球的最后一次使用确认处，按 R+SELECT 启动，再按取消；无需重新注入。"))
+                print(tr("捕获阈值固定 16643；独立 Offset={first}..{last} advances。241 仅为参考起点，须按本插件校准。",
+                         first=plan["capture"]["offset_min"], last=plan["capture"]["offset_max"]))
+                print(tr("捕获下排 8=搜索，9=投球倒计时，C=已发一次 A，E=取消或耗尽；错过先显示红色 D 再续搜。"))
+            else:
+                print(tr("续搜保留初始 seed 和筛选条件，不补按旧目标。发送一次按键后结束；E=范围耗尽，F=计数失效，也会结束。"))
             print(tr("捕获后按 L+R 读实际 PID，用下方 PID 反查核对。软重启 / 关闭游戏会清除注入，下一轮需重新安装。"))
         if plan["wild_species"]:
             print(tr("筛选物种：{species}（#{number:03d}）", species=species_name(plan['wild_species']), number=plan['wild_species']))
@@ -106,6 +116,10 @@ def main(argv=None):
                 tr("额外 Offset\t{offset} advances（总提前量 {total}）", offset=plan['offset_advances'], total=plan['auto_a_offset_advances']),
                 tr("实机验证\t尚未完成"),
                 tr("捕获结果\t等待核对"),
+                tr("捕获搜索\t{mode}", mode=tr("已预载" if plan["capture"]["enabled"] else "未启用")),
+                *([tr("捕获 Offset\t{first}..{last} advances（独立于生成 Offset）",
+                      first=plan["capture"]["offset_min"], last=plan["capture"]["offset_max"])]
+                  if plan["capture"]["enabled"] else []),
             ],
             ok=None,
         )

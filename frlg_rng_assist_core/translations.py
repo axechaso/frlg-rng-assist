@@ -1,6 +1,48 @@
 """English / Japanese UI copy keyed by the original Chinese text."""
 
 TEXT = {
+    "捕获搜索\t{mode}": ("Capture search\t{mode}", "捕獲検索\t{mode}"),
+    "已预载": ("Preloaded", "読み込み済み"), "未启用": ("Disabled", "無効"),
+    "捕获 Offset\t{first}..{last} advances（独立于生成 Offset）": (
+        "Capture offset\t{first}..{last} advances (separate from generation offset)",
+        "捕獲Offset\t{first}..{last}消費（生成Offsetとは別）"),
+    "预载出闪后的捕获搜索": ("Preload capture search after the encounter", "遭遇後の捕獲検索を事前に読み込む"),
+    "固定最低阈值 16643。手动停在球的最后一次使用确认处，用 R+SELECT 启动 / 取消。": (
+        "Fixed minimum threshold 16643. Stop at the ball's final Use confirmation; R+SELECT starts / cancels.",
+        "最低しきい値16643で固定。ボールの最後の「つかう」で待機し、R+SELECTで開始・中止します。"),
+    "捕获 Offset 下限": ("Capture offset minimum", "捕獲Offsetの下限"),
+    "捕获 Offset 上限（留空等于下限）": ("Capture offset maximum (blank = minimum)", "捕獲Offsetの上限（空欄＝下限）"),
+    "从 A 回调 seed 到首次摇球判定前；独立于生成 Offset。241 为参考起点，须按本插件校准。": (
+        "Advances from the A callback seed to before the first shake roll; separate from generation offset. "
+        "241 is a reference starting point; calibrate with this plugin.",
+        "A入力コールバックのseedから最初の揺れ判定直前までの消費数。生成Offsetとは別です。"
+        "241は参考値で、このプラグインでの実測調整が必要です。"),
+    "整个偏移带的所有起点都须四次成功；上下限之差最多 12 advances。": (
+        "All four checks must pass at every offset in the band. Maximum width: 12 advances.",
+        "範囲内の全ての起点で4回とも成功する必要があります。上下限の差は最大12消費です。"),
+    "勾选预载捕获后，出闪并停在球的最后一次使用确认处，按 R+SELECT 启动，再按取消；无需重新注入。": (
+        "With capture preloaded, stop at the ball's final Use confirmation after the encounter; "
+        "R+SELECT starts / cancels. No reinjection is needed.",
+        "捕獲機能を事前に読み込み、遭遇後にボールの最後の「つかう」で待機。"
+        "R+SELECTで開始・中止でき、再注入は不要です。"),
+    "已预载捕获搜索：出闪后停在球的最后一次使用确认处，按 R+SELECT 启动，再按取消；无需重新注入。": (
+        "Capture preloaded: after the encounter, stop at the ball's final Use confirmation. "
+        "R+SELECT starts / cancels; no reinjection is needed.",
+        "捕獲検索を読み込み済み。遭遇後、ボールの最後の「つかう」でR+SELECTを押すと開始、"
+        "もう一度で中止。再注入は不要です。"),
+    "捕获阈值固定 16643；独立 Offset={first}..{last} advances。241 仅为参考起点，须按本插件校准。": (
+        "Capture threshold fixed at 16643; separate offset={first}..{last} advances. "
+        "241 is only a reference starting point; calibrate with this plugin.",
+        "捕獲しきい値16643で固定。独立したOffset={first}..{last}消費。"
+        "241は参考値で、このプラグインでの実測調整が必要です。"),
+    "捕获下排 8=搜索，9=投球倒计时，C=已发一次 A，E=取消或耗尽；错过先显示红色 D 再续搜。": (
+        "Capture lower row: 8=search, 9=countdown, C=one A sent, E=cancelled / exhausted; "
+        "a miss displays red D before retrying.",
+        "捕獲時の下段：8=検索、9=投球カウントダウン、C=Aを1回送信、E=中止・範囲終了。"
+        "逃した場合は赤いDを表示してから再検索します。"),
+    "捕获开关必须是布尔值": ("Capture switch must be boolean", "捕獲スイッチは真偽値で指定してください"),
+    "捕获 Offset 上下限之差不能超过 12 advances": (
+        "Capture offset width cannot exceed 12 advances", "捕獲Offsetの上下限の差は12消費以内にしてください"),
     "游戏": ("Game", "ゲーム"), "火红": ("FireRed", "ファイアレッド"), "叶绿": ("LeafGreen", "リーフグリーン"),
     "类别": ("Category", "カテゴリ"), "目标": ("Target", "対象"), "遭遇方式": ("Encounter type", "遭遇方法"),
     "生成方式": ("Generation method", "生成方式"), "不限": ("Any", "指定なし"),

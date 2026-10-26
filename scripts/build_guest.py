@@ -21,7 +21,7 @@ def tool(name):
     return result
 
 
-def build():
+def build_image(capture=False, model=-1):
     sources = [ROOT / "guest" / name for name in ("runtime.c", "runtime.ld")]
     with tempfile.TemporaryDirectory(prefix="frlg-rng-guest-") as folder:
         elf, binary = Path(folder) / "guest.elf", Path(folder) / "guest.bin"
@@ -41,6 +41,11 @@ def build():
                 "-fno-asynchronous-unwind-tables",
                 "-fno-common",
                 "-nostdlib",
+                *(["-fno-tree-ch"] if capture else []),
+                *(["-fno-toplevel-reorder", "-fno-tree-pre", "-fno-ssa-phiopt"]
+                  if capture and model == 2 else []),
+                f"-DWITH_CAPTURE={int(capture)}",
+                f"-DGUEST_MODEL={model}",
                 "-Wl,--build-id=none",
                 "-T",
                 str(sources[1]),
@@ -80,6 +85,14 @@ def build():
             )
         },
     }
+    return result
+
+
+def build():
+    result = build_image()
+    result["capture_variants"] = {
+        model: build_image(True, index) for index, model in enumerate(("static", "wild", "unown"))
+    }
     with tempfile.TemporaryDirectory(prefix="frlg-rng-loader-") as folder:
         obj, binary = Path(folder) / "loader.o", Path(folder) / "loader.bin"
         source = ROOT / "guest" / "loader.s"
@@ -109,8 +122,10 @@ def main():
         if not OUT.exists() or OUT.read_text(encoding="utf-8") != rendered:
             raise SystemExit("guest.json 与源文件不符；运行 scripts/build_guest.py")
     else:
-        OUT.write_text(rendered, encoding="utf-8")
+        OUT.write_text(rendered, encoding="utf-8", newline="\n")
     print(f"GBA resident: {result['length']} bytes, capacity {0x02040000 - result['base']} bytes")
+    for model, variant in result["capture_variants"].items():
+        print(f"GBA capture / {model}: {variant['length']} bytes")
 
 
 if __name__ == "__main__":
