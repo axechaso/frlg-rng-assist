@@ -23,7 +23,7 @@ struct Config {
     u16 offset;
     u8 model, method, shiny, nature, menus, button, minimum[6], maximum[6], letters[13];
 #if WITH_CAPTURE
-    u8 capture; /* enabled + offset width; menus == 2 selects the capture phase */
+    u8 capture; /* offset width +1; bit7 selects Ultra Ball; menus == 2 is capture */
     u16 catch_offset; /* Host offset plus the main-loop RFU draw. */
     u32 catch_a, catch_c;
 #endif
@@ -35,7 +35,7 @@ enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIR
 /* All cross-callback access is bounded by function calls / IRQ masking. The
  * entry barriers below keep ordinary RAM snapshots on their callback boundary. */
 struct State { u8 status, reason, notice, work_active;
-    u32 initial, seed, index, cursor, next, target, shown;
+    u32 initial, seed, index, cursor, next, target;
 };
 __attribute__((section(".state"), used)) struct State state = {0};
 #define C config
@@ -110,20 +110,23 @@ static u32 nature_of(u32 lo, u32 hi) {
     return n;
 }
 
+static const u16 thresholds[2];
+
 __attribute__((noinline)) int matches(u32 seed) {
     u32 a, lo, hi;
 #if WITH_CAPTURE
     if (C.menus == 2) {
         /* The union of four draws at EVERY possible offset, as in the user's
          * v24 / v27g verified model. Strict <, fixed minimum threshold. */
-        u32 draws = C.capture + 4;
+        u32 draws = (C.capture & 0x7F) + 4;
+        u16 threshold = thresholds[C.capture >> 7];
         do {
             seed = step(seed);
-            if (seed >> 16 >= 16643) return draws == 1;
+            if (seed >> 16 >= threshold) return draws == 1;
         } while (--draws);
         /* The extra final draw is the only new draw for the next overlapping
          * start, so a passing value moves the target to the run centre. */
-        S.next += seed >> 16 < 16643;
+        ++S.next;
         return 1;
     }
 #endif
@@ -187,6 +190,7 @@ rolled:
     return 1;
 }
 
+static const u16 thresholds[2] = {16643, 19784};
 static const u16 font[16] = {0x7B6F, 0x749A, 0x73E7, 0x79E7, 0x49ED, 0x79CF, 0x7BCF, 0x4927,
     0x7BEF, 0x79EF, 0x5BEF, 0x3AEB, 0x724F, 0x3B6B, 0x73CF, 0x13CF};
 static u32 bcd(u32 n) {
@@ -231,8 +235,8 @@ __attribute__((always_inline)) static inline void party_values(u32 *values, u32 
 /* Eight 8x16 objects use the same final eight OAM slots as the upstream overlay.
  * Dynamic upper/lower tiles show all eight seed digits and a status + 7-digit count.
  */
-__attribute__((noinline)) void tiles(u32 keys) {
-    u32 values[2] = {S.seed, S.shown};
+__attribute__((noinline)) void tiles(u32 keys, u32 shown) {
+    u32 values[2] = {S.seed, shown};
     if (keys & 0x100) {
         party_values(values, keys);
     } else if (keys & 0x200) {
@@ -354,7 +358,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 digits = 0xCCFDEBAF;
 #endif
     display = (digits >> (display * 4)) & 15;
-    S.shown = (display << 28) | bcd(n);
+    u32 shown = (display << 28) | bcd(n);
     if (!reason) {
         /* Original VBlank has copied the game's OAM. Patch the final eight
          * hardware slots now; leave gMain.oamBuffer untouched. This is the
@@ -367,9 +371,9 @@ __attribute__((section(".entry"), used)) void hook(void) {
         if (S.status == MISSED && S.notice && !(keys & 0x300)) --S.notice;
         u32 color = keys & 0x100 ? 0x7FFF : S.status == MISSED ? 0x001F
             : S.status == FOUND
-                ? (S.shown & 1 ? 0x02FF : 0x03E0) : 0x7FFF;
+                ? (shown & 1 ? 0x02FF : 0x03E0) : 0x7FFF;
         U16(C.palette) = U16(C.palette - 0x400) = color;
         U16(C.palette + 2) = U16(C.palette - 0x3FE) = 0;
-        tiles(keys);
+        tiles(keys, shown);
     }
 }

@@ -1,4 +1,4 @@
-# FRLG RNG Assist 0.7.2
+# FRLG RNG Assist 0.7.3
 
 [简体中文](README.md) | [日本語](README.ja.md) | [English](README.en.md)
 
@@ -8,7 +8,7 @@ This is a hardware-test build. Software tests and offline host checks do not rep
 
 ## Installation and interface
 
-Use PokeLDN v0.39.1 / API 1.11. Open Plugins → Add a plugin and select **frlg-rng-assist-0.7.2.pokeplugin**. An existing installation can be updated from its plugin card. Supported game builds are Switch English / French rev 0A: BPRE, BPGE, BPRF and BPGF. Wireless firmware 1.8.0 remains compatible. The package includes compiled code; users do not need Python or an ARM compiler.
+Use PokeLDN v0.39.1 / API 1.11. Open Plugins → Add a plugin and select **frlg-rng-assist-0.7.3.pokeplugin**. An existing installation can be updated from its plugin card. Supported game builds are Switch English / French rev 0A: BPRE, BPGE, BPRF and BPGF. Wireless firmware 1.8.0 remains compatible. The package includes compiled code; users do not need Python or an ARM compiler.
 
 Tool names, descriptions, categories, locations, species, natures and output support **Chinese / Japanese / English**, following PokeLDN's App language. Restart PokeLDN after changing its language to reload the plugin. Other interface languages fall back to English. Chinese and Japanese require the corresponding PokeLDN language packs. These translations affect the interface; supported game builds remain the English / French builds listed above. The installation card uses a shared trilingual description.
 
@@ -32,13 +32,13 @@ The plugin does not check your position, facing direction, interaction target or
 
 ## Throwing after a shiny encounter
 
-1. **Before injection**, enable **Preload capture search after the encounter**; it is enabled by default in the interface. An existing 0.6.0 RAM injection cannot be extended during battle. After updating the plugin, a new injection is required.
+1. **Before injection**, enable **Preload capture search after the encounter**; it is enabled by default. Select the capture ball: Poké Ball is the default and Ultra Ball is also available. An existing 0.6.0 RAM injection cannot be extended during battle. After updating the plugin, a new injection is required.
 2. After generation starts the battle, choose a ball yourself and stop at the final **Use** confirmation. Hold R, tap SELECT once, then release both buttons.
 3. The lower row shows **8** while searching and **9** during the throw countdown. At the deadline, the plugin sends **A** once. Capture search groups adjacent successful candidates and prefers the centre of the run; a three-candidate run uses its middle candidate. **Green means the current advance and the A-input deadline have matching parity; yellow means they differ.** Parity is only reported here and can be adjusted manually. The capture Offset is included in this comparison. Ho-Oh still uses Up for generation; every capture uses A. This continues on the console after the PC installation session ends, without returning to Mystery Gift or reseeding.
 4. Press **R+SELECT** again to cancel; the display changes to E. You can start another search from E, or from C after one throw. Holding the buttons does not repeatedly enable it. Cancellation stops the automatic throw.
 5. Once displayed, the target stays fixed. A missed deadline, changed callback or failed RNG check shows a red D notice for about one second before searching again. The plugin does not send a late input for the old target. After a throw, C means an input was sent; check the game for the actual capture result.
 
-The capture model follows the user-provided v24 / v27g verification logic: **the threshold is fixed at 16643**, and all four strict checks must pass at every possible start in the Offset band. There are no HP, status or ball-multiplier filters. This applies to ordinary catchable wild battles. Safari Zone, Trainer battles and uncatchable targets do not use this menu flow.
+The capture model follows the user-provided v24 / v27g verification logic: the Poké Ball threshold is **16643**, while Ultra Ball uses **19784**; all four strict checks must pass at every possible start in the Offset band. The menu currently distinguishes these two balls and has no HP or status filters. This applies to ordinary catchable wild battles. Safari Zone, Trainer battles and uncatchable targets do not use this menu flow.
 
 **Capture Offset and generation Offset are independent**, both measured in RNG advances. Capture Offset counts from the seed at the actual A-input callback to the state before the first shake Random call. The resident code separately includes the single RFU advance before that callback. The default **241** is a reference awaiting calibration. A blank upper bound equals the lower bound; supplying an upper bound requires success throughout the band. The v24 range of 242–245 was measured on the older SysBot path and does not establish a verified Offset for this plugin.
 
@@ -125,10 +125,10 @@ $env:POKELDN_SOURCE = 'D:\path\to\pokeldn-v0.39.1'
 python -m ruff check .
 python -m pytest -q
 python scripts/build_guest.py --check
-python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.2.pokeplugin
+python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.3.pokeplugin
 ```
 
-To rebuild, set ARM_TOOLCHAIN to the ARM tool directory, including its trailing separator, then run scripts/build_guest.py. The resident reservation remains 2200 bytes. The ordinary resident uses 2160 bytes; capture-enabled stationary / wild / Unown variants use 2048 / 2196 / 2192 bytes. Installation selects one complete variant for the model; do not combine it with other resident hooks. After initialization, three RAM words holding first / initial jump parameters are reused as scratch state without enlarging the reservation. Species are still encoded as a 100-bit slot mask. The plugin does not write RNG, Pokémon, save or ROM data. The game's decryption accessor receives only a stack copy.
+To rebuild, set ARM_TOOLCHAIN to the ARM tool directory, including its trailing separator, then run scripts/build_guest.py. The resident reservation remains 2200 bytes. The ordinary resident uses 2152 bytes; capture-enabled stationary / wild / Unown variants use 2068 / 2188 / 2200 bytes. Installation selects one complete variant for the model; do not combine it with other resident hooks. After initialization, three RAM words holding first / initial jump parameters are reused as scratch state without enlarging the reservation. Species are still encoded as a 100-bit slot mask. The plugin does not write RNG, Pokémon, save or ROM data. The game's decryption accessor receives only a stack copy.
 
 To update static encounter data, run `python scripts/import_wild_data.py --decomp PATH --pokefinder PATH`. Committed data records its source commits. Users do not need these development dependencies. See NOTICE for species / nature translation sources and licences.
 

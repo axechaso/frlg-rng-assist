@@ -1,11 +1,11 @@
-# 捕获模型与输入坐标（0.7.2）
+# 捕获模型与输入坐标（0.7.3）
 
 用户提供的 `FRLGSwitchSeedFarmer` 同目录包含：
 
 - `frlg_capture_engine_v24.py`，SHA-256 `55b69f64e5027f032baee5293074c4a174fcdf5dad917ad4ff68ea8a5c50dfc5`。
 - `frlg_easycon_capture_calibrator_v27g.py`，SHA-256 `cf04bad23ce7663cc818a428637a92a928a3d59aa8748ff2a8460046c1d52842`。
 
-v24 的 `check_capture_band` 与 v27g 的 `verify_band` 使用相同的偏移带判定。v27g 当前示例阈值为 19784，另保留阈值 16643 的已验证旧样本。本插件依用户要求固定 **16643**，不照搬高级球示例条件或 SysBot / 伊机控的传输时序。
+v24 的 `check_capture_band` 与 v27g 的 `verify_band` 使用相同的偏移带判定。精灵球阈值为 **16643**，高级球（Ultra Ball）阈值为 **19784**；后者来自用户提供的高级球示例。本插件不照搬 SysBot / 伊机控的传输时序。
 
 设 `s` 为游戏回调收到投球 A 时的 RNG seed，偏移下限 / 上限为 `lo, hi`：
 
@@ -13,7 +13,7 @@ v24 的 `check_capture_band` 与 v27g 的 `verify_band` 使用相同的偏移带
 2. 此后四次 Random 的高 16 位必须**全部严格小于 16643**。
 3. 各起点的四次抽取重叠，因此等价于：从 `advance(s, lo)` 开始，接下来的 `hi−lo+4` 次高 16 位全部通过。
 
-例如上、下限都是 241，检查四次；242～245 检查连续七次。阈值相等也判失败。源码游戏依据为 [Cmd_handleballthrow](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/battle_script_commands.c)：普通球、最低普通可捕获种族捕获率 3、满 HP、无状态时 odds=1，整数平方根公式得到 16643。正常可捕获战斗中更高阈值也会通过这一组抽取；这个数学结论以实际抽取起点落在所设偏移带内为前提。
+例如上、下限都是 241，检查四次；242～245 检查连续七次。阈值相等也判失败。源码游戏依据为 [Cmd_handleballthrow](https://github.com/pret/pokefirered/blob/c75f352304d529f6ba92d4f74b9cf8b5c3810788/src/battle_script_commands.c)：球种 2 是高级球，倍率 20（2 倍），最低普通可捕获种族捕获率 3、满 HP、无状态时得到 19784；精灵球倍率 10 得到 16643。这个数学结论以实际抽取起点落在所设偏移带内为前提。
 
 ## 掌机端
 

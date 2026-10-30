@@ -12,6 +12,12 @@ TEXT = {
         "最低しきい値16643で固定。ボールの最後の「つかう」で待機し、R+SELECTで開始・中止します。"),
     "捕获 Offset 下限": ("Capture offset minimum", "捕獲Offsetの下限"),
     "捕获 Offset 上限（留空等于下限）": ("Capture offset maximum (blank = minimum)", "捕獲Offsetの上限（空欄＝下限）"),
+    "捕获球种": ("Capture ball", "捕獲ボール"),
+    "精灵球": ("Poké Ball", "モンスターボール"),
+    "高级球": ("Ultra Ball", "ハイパーボール"),
+    "精灵球阈值 16643；高级球（Ultra Ball）阈值 19784。": (
+        "Poké Ball threshold 16643; Ultra Ball threshold 19784.",
+        "モンスターボールのしきい値は16643、ハイパーボールは19784です。"),
     "从 A 回调 seed 到首次摇球判定前；独立于生成 Offset。241 为参考起点，须按本插件校准。": (
         "Advances from the A callback seed to before the first shake roll; separate from generation offset. "
         "241 is a reference starting point; calibrate with this plugin.",
@@ -35,12 +41,18 @@ TEXT = {
         "241 is only a reference starting point; calibrate with this plugin.",
         "捕獲しきい値16643で固定。独立したOffset={first}..{last}消費。"
         "241は参考値で、このプラグインでの実測調整が必要です。"),
+    "捕获球种={ball}，阈值={threshold}；独立 Offset={first}..{last} advances。241 仅为参考起点，须按本插件校准。": (
+        "Capture ball={ball}, threshold={threshold}; separate offset={first}..{last} advances. "
+        "241 is only a reference starting point; calibrate with this plugin.",
+        "捕獲ボール={ball}、しきい値={threshold}。独立したOffset={first}..{last}消費。"
+        "241は参考値で、このプラグインでの実測調整が必要です。"),
     "捕获下排 8=搜索，9=投球倒计时，C=已发一次 A，E=取消或耗尽；错过先显示红色 D 再续搜。": (
         "Capture lower row: 8=search, 9=countdown, C=one A sent, E=cancelled / exhausted; "
         "a miss displays red D before retrying.",
         "捕獲時の下段：8=検索、9=投球カウントダウン、C=Aを1回送信、E=中止・範囲終了。"
         "逃した場合は赤いDを表示してから再検索します。"),
     "捕获开关必须是布尔值": ("Capture switch must be boolean", "捕獲スイッチは真偽値で指定してください"),
+    "捕获球种必须是 poke 或 ultra": ("Capture ball must be poke or ultra", "捕獲ボールはpokeまたはultraです"),
     "捕获 Offset 上下限之差不能超过 12 advances": (
         "Capture offset width cannot exceed 12 advances", "捕獲Offsetの上下限の差は12消費以内にしてください"),
     "游戏": ("Game", "ゲーム"), "火红": ("FireRed", "ファイアレッド"), "叶绿": ("LeafGreen", "リーフグリーン"),

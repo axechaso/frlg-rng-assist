@@ -92,7 +92,8 @@ def validate_context(game, build, target):
 
 def install_plan(game, build, target, *, first=10000, last=200000, criteria=None, offset=None,
                  method=1, chamber="monean", location="other", species=0,
-                 capture=False, capture_offset=241, capture_offset_max=None):
+                 capture=False, capture_offset=241, capture_offset_max=None,
+                 capture_ball="poke"):
     backend()
     validate_context(game, build, target)
     bounded(first, 0, 9_999_999, "范围起点")
@@ -147,7 +148,7 @@ def install_plan(game, build, target, *, first=10000, last=200000, criteria=None
         "volatile": True,
         "result_verified": False,
         "hardware_tested": False,
-        "capture": capture_settings(capture, capture_offset, capture_offset_max),
+        "capture": capture_settings(capture, capture_offset, capture_offset_max, capture_ball),
     }
 
 
@@ -198,7 +199,8 @@ def resident(plan, code):
         capture = plan["capture"]
         increment = lcg.advance(0, capture["offset_min"] + 2)
         multiplier = (lcg.advance(1, capture["offset_min"] + 2) - increment) & 0xFFFFFFFF
-        settings += struct.pack("<BHII", capture["offset_max"] - capture["offset_min"] + 1,
+        ball_flag = 0x80 if capture["ball"] == "ultra" else 0
+        settings += struct.pack("<BHII", ball_flag | (capture["offset_max"] - capture["offset_min"] + 1),
                                 capture["offset_min"] + 1, multiplier, increment)
     at = manifest["symbols"]["config"] - manifest["base"]
     blob[at : at + len(settings)] = settings

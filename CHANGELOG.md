@@ -1,5 +1,10 @@
 # Changes
 
+## 0.7.3 — 2026-10-30
+
+- Add a capture ball selector: Poké Ball keeps threshold 16643, and Ultra Ball / 高级球 uses the user-provided threshold 19784. The selected ball is packed into the resident without changing the transfer layout.
+- Keep the centre-candidate behavior and manual parity adjustment from 0.7.2. Rebuild the resident layouts: ordinary 2152 bytes; capture static / wild / Unown 2068 / 2188 / 2200 bytes.
+
 ## 0.7.2 — 2026-10-30
 
 - Capture search now prefers the centre of adjacent successful candidates. A three-start success run selects its middle candidate by checking the overlapping next start before locking the 9 countdown.

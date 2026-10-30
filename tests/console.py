@@ -23,7 +23,7 @@ BUFFER = 0x0201C000
 PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
-STATES = ("initial", "seed", "index", "cursor", "next", "target", "shown")
+STATES = ("initial", "seed", "index", "cursor", "next", "target")
 STATE_BYTES = ("status", "reason", "notice", "work_active")
 # Pinned host address facts, independently of the config word under test.
 MON_DATA = {"BPRE": 0x08043390, "BPGE": 0x08043390, "BPRF": 0x080432E4, "BPGF": 0x080432E4}
@@ -48,6 +48,7 @@ class Console:
         capture=False,
         capture_offset=241,
         capture_offset_max=None,
+        capture_ball="poke",
     ):
         self.code, self.profile = code, PROFILES[code]
         self.plan = install_plan(
@@ -65,6 +66,7 @@ class Console:
             capture=capture,
             capture_offset=capture_offset,
             capture_offset_max=capture_offset_max,
+            capture_ball=capture_ball,
         )
         self.manifest = guest(self.plan)
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
@@ -169,6 +171,23 @@ class Console:
 
     def s(self, name, value=None):
         base = self.manifest["symbols"]["state"]
+        if name == "shown":
+            assert value is None, "shown is derived from the compiled guest"
+            status = self.read(base, 1)
+            reason = self.read(base + 1, 1)
+            index = self.read(base + 4 + 2 * 4)
+            target = self.read(base + 4 + 5 * 4)
+            next_value = self.read(base + 4 + 4 * 4)
+            offset = self.read(self.manifest["symbols"]["config"] + 72, 2)
+            menus = self.read(self.manifest["symbols"]["config"] + 78, 1)
+            n = (next_value if status == 1 else target - offset - index if status == 2
+                 else reason if status == 4 else int(status == 6))
+            bcd = 0
+            for _ in range(7):
+                bcd |= (n % 10) << (4 * (_))
+                n //= 10
+            digits = 0xCCFDE98F if menus == 2 else 0xCCFDEBAF
+            return (((digits >> (status * 4)) & 15) << 28) | bcd
         scratch = {"call_slot": 48, "call_context": 60, "work_cursor": 56}
         if name in scratch:
             at, size = self.manifest["symbols"]["config"] + scratch[name], 4

@@ -15,7 +15,7 @@ import install
 import plugin
 from console import Console
 from frlg_rng_assist_core.backend import backend
-from frlg_rng_assist_core.capture import THRESHOLD, check_band, find_window, settings
+from frlg_rng_assist_core.capture import ULTRA_THRESHOLD, THRESHOLD, check_band, find_window, settings
 from frlg_rng_assist_core.model import Criteria
 from frlg_rng_assist_core.native import guest, payloads
 from test_wild import finish_match, reference
@@ -25,6 +25,22 @@ def test_fixed_minimum_threshold_matches_game_integer_formula():
     # catchRate=3, normal ball=10, full HP, no status -> odds=1.
     assert 1048560 // isqrt(isqrt(16711680)) == THRESHOLD == 16643
     assert settings(True)["threshold"] == THRESHOLD
+    assert settings(True, ball="ultra")["threshold"] == ULTRA_THRESHOLD == 19784
+
+
+def test_ultra_ball_guest_uses_the_higher_threshold():
+    pre = 0x9B4FDE3A  # first five high halves: 4499,15779,19309,17049,1860
+    normal = Console(criteria=Criteria(shiny=False), capture=True)
+    ultra = Console(criteria=Criteria(shiny=False), capture=True, capture_ball="ultra")
+    for c in (normal, ultra):
+        generate(c)
+        c.set_overworld(False)
+        arm(c, c.s("index") + 20)
+        c.s("next", 1234)
+    assert normal.call(normal.manifest["symbols"]["matches"] | 1, pre) == 0
+    assert normal.s("next") == 1234
+    assert ultra.call(ultra.manifest["symbols"]["matches"] | 1, pre) == 1
+    assert ultra.s("next") == 1235
 
 
 def test_v27g_verified_legacy_capture_vector_and_minimum_rate():
@@ -286,7 +302,8 @@ def test_capture_fields_work_with_real_host_command_builder(monkeypatch, languag
     tools = []
     plugin.register(SimpleNamespace(add_tool=lambda game, tool: tools.append(tool)))
     tool = replace(tools[0], script=str(Path(install.__file__)))
-    values = {"--capture-rng": True, "--capture-offset": "242", "--capture-offset-max": "245"}
+    values = {"--capture-rng": True, "--capture-ball": "ultra",
+              "--capture-offset": "242", "--capture-offset-max": "245"}
     assert command.applies(next(f for f in tool.fields if f.flag == "--capture-offset"), tool, values)
     host = SimpleNamespace(received="", keys="", capture=logging, language=2, gender=0,
                            ids=lambda game: (12345, 2791), name=lambda game: "TEST")
@@ -294,7 +311,7 @@ def test_capture_fields_work_with_real_host_command_builder(monkeypatch, languag
     argv = command.build(tool, values, {}, host)
     assert "--capture" not in argv  # Reserved by the host for a capture log filename.
     args = install.build_parser().parse_args(argv)
-    assert args.capture and (args.capture_offset, args.capture_offset_max) == (242, 245)
+    assert args.capture and args.capture_ball == "ultra" and (args.capture_offset, args.capture_offset_max) == (242, 245)
     values["--capture-rng"] = False
     assert not command.applies(next(f for f in tool.fields if f.flag == "--capture-offset"), tool, values)
     args = install.build_parser().parse_args(command.build(tool, values, {}, host))

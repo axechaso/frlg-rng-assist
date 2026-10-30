@@ -42,6 +42,8 @@ def build_image(capture=False, model=-1):
                 "-fno-common",
                 "-nostdlib",
                 *(["-fno-tree-ch"] if capture else []),
+                *(["-fno-if-conversion", "-fno-tree-vrp", "-fno-tree-loop-im"]
+                  if capture and model == 1 else []),
                 *(["-fno-toplevel-reorder", "-fno-tree-pre", "-fno-ssa-phiopt",
                    "-fno-tree-vrp", "-fno-tree-loop-vectorize", "-fno-tree-dce", "-fno-tree-fre",
                    "-fno-if-conversion"]
