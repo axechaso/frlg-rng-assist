@@ -36,7 +36,6 @@ enum { SCRIPT = 3, NOT_OVERWORLD, NO_TARGET, PASSED = 9, LAG, RNG_CHANGED, EXPIR
  * entry barriers below keep ordinary RAM snapshots on their callback boundary. */
 struct State { u8 status, reason, notice, work_active;
     u32 initial, seed, index, cursor, next, target, shown;
-    u32 call_original;
 };
 __attribute__((section(".state"), used)) struct State state = {0};
 #define C config
@@ -88,7 +87,7 @@ __attribute__((noinline)) void press_shim(void) {
     __asm__ volatile ("" ::: "memory");
     u32 ime = U16(0x04000208);
     U16(0x04000208) = 0;
-    U32(CALL_SLOT) = S.call_original;
+    U32(CALL_SLOT) = S.target;
     if (S.status == PENDING) {
         u32 reason = U32(C.rng) != step(S.seed) ? RNG_CHANGED
             : U32(C.main + 4) != CALL_CONTEXT ? NOT_OVERWORLD : readiness();
@@ -101,7 +100,7 @@ __attribute__((noinline)) void press_shim(void) {
         } else miss(reason);
     }
     U16(0x04000208) = ime;
-    ((callback)S.call_original)();
+    ((callback)S.target)();
 }
 
 static u32 nature_of(u32 lo, u32 hi) {
@@ -117,11 +116,14 @@ __attribute__((noinline)) int matches(u32 seed) {
     if (C.menus == 2) {
         /* The union of four draws at EVERY possible offset, as in the user's
          * v24 / v27g verified model. Strict <, fixed minimum threshold. */
-        u32 draws = C.capture + 3;
+        u32 draws = C.capture + 4;
         do {
             seed = step(seed);
-            if (seed >> 16 >= 16643) return 0;
+            if (seed >> 16 >= 16643) return draws == 1;
         } while (--draws);
+        /* The extra final draw is the only new draw for the next overlapping
+         * start, so a passing value moves the target to the run centre. */
+        S.next += seed >> 16 < 16643;
         return 1;
     }
 #endif
@@ -261,7 +263,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
     u32 idle = !(U16(C.main + 0x1C) & 1);
     /* A second interrupt before callback1 means the pending press has expired. */
     if (S.status == PENDING) {
-        if (U32(CALL_SLOT) == (u32)press_shim) U32(CALL_SLOT) = S.call_original;
+        if (U32(CALL_SLOT) == (u32)press_shim) U32(CALL_SLOT) = S.target;
         miss(EXPIRED);
     }
     ((callback)C.original)();
@@ -295,7 +297,10 @@ __attribute__((section(".entry"), used)) void hook(void) {
     }
 #endif
     u32 reason = readiness();
-    u32 stable = idle && delta == 2 && !reason;
+    /* Capture candidates are scanned independent of parity. The player can
+     * shift the live parity manually; the centre of the success run remains
+     * the selected target. */
+    u32 stable = idle && delta == 2 && !reason && !(C.menus >> 1);
     /* Keep the reason visible for 60 eligible frames before looking ahead again.
      * Static map profiles retain the notice in menus; tracking continues throughout.
      * Catch-up rebases from the live RNG, within the original range / epoch. */
@@ -311,7 +316,7 @@ __attribute__((section(".entry"), used)) void hook(void) {
         else if (S.index == press) {
             if (idle && !reason) {
                 CALL_SLOT = C.main + (overworld() ? 0 : 4);
-                S.call_original = U32(CALL_SLOT); CALL_CONTEXT = U32(C.main + 4);
+                S.target = U32(CALL_SLOT); CALL_CONTEXT = U32(C.main + 4);
                 S.status = PENDING; U32(CALL_SLOT) = (u32)press_shim;
             }
             else miss(idle ? reason : LAG);

@@ -1,5 +1,11 @@
 # Changes
 
+## 0.7.2 — 2026-10-30
+
+- Capture search now prefers the centre of adjacent successful candidates. A three-start success run selects its middle candidate by checking the overlapping next start before locking the 9 countdown.
+- Capture candidates are scanned independently of parity; green / yellow remains a manual parity hint, so users can adjust the live parity without the plugin replacing the selected centre.
+- Rebuild the resident layouts after compacting the pending callback state: ordinary 2160 bytes; capture static / wild / Unown 2048 / 2196 / 2192 bytes, all within the verified 2200-byte reservation.
+
 ## 0.7.1 — 2026-10-26
 
 - Use `--capture-rng` for the plugin's preloaded capture search, keeping PokeLDN's `--capture <logfile>` separate. The installer now starts correctly with the host's session-recording setting on or off. Test both settings through the real command builder in all three languages.

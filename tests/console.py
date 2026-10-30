@@ -23,8 +23,7 @@ BUFFER = 0x0201C000
 PARAM = 0x02030200
 SEED16 = 0x02020000
 SB2 = 0x02024584
-STATES = ("initial", "seed", "index", "cursor", "next", "target", "shown",
-          "call_original")
+STATES = ("initial", "seed", "index", "cursor", "next", "target", "shown")
 STATE_BYTES = ("status", "reason", "notice", "work_active")
 # Pinned host address facts, independently of the config word under test.
 MON_DATA = {"BPRE": 0x08043390, "BPGE": 0x08043390, "BPRF": 0x080432E4, "BPGF": 0x080432E4}

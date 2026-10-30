@@ -33,7 +33,7 @@ jobs:
       - name: Pack plugin using the pinned host
         run: |
           New-Item -ItemType Directory -Force plugin/dist | Out-Null
-          python host/scripts/pack_plugin.py plugin -o plugin/dist/frlg-rng-assist-0.7.1.pokeplugin
+          python host/scripts/pack_plugin.py plugin -o plugin/dist/frlg-rng-assist-0.7.2.pokeplugin
       - uses: actions/upload-artifact@v4
         with:
           name: frlg-rng-assist-test-package

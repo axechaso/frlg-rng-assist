@@ -1,4 +1,4 @@
-# FRLG RNG Assist 0.7.1
+# FRLG RNG Assist 0.7.2
 
 [简体中文](README.md) | [日本語](README.ja.md) | [English](README.en.md)
 
@@ -8,7 +8,7 @@ PokeLDN 独立第三方插件。设置 RNG advances 范围和条件，掌机显�
 
 ## 安装与界面
 
-使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.7.1.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
+使用 PokeLDN v0.39.1 / API 1.11，Plugins → Add a plugin，选择 **frlg-rng-assist-0.7.2.pokeplugin**。已有版本可在插件卡片更新。支持 Switch 英文 / 法文 rev 0A：BPRE、BPGE、BPRF、BPGF，Wireless 1.8.0 可继续使用。包内有预编译代码，用户不需要 Python 或 ARM 编译器。
 
 工具名称、说明、分类、地点、物种、性格和输出支持**中文 / 日本語 / English**，跟随 PokeLDN 的 App language。更改宿主语言后重启 PokeLDN 重新载入插件；其他界面语言回退到英文。中文 / 日文宿主需要对应的 PokeLDN 语言包。这是界面翻译，游戏支持范围仍为上述英文 / 法文构建。安装卡片的简介为三语共用文本。
 
@@ -34,7 +34,7 @@ Games → FireRed & LeafGreen 下只保留两个工具：
 
 1. **注入之前**勾选「预载出闪后的捕获搜索」（界面默认勾选）。已有 0.6.0 RAM 注入不能在战斗中补装，更新插件后需重新注入。
 2. 完成生成、进入战斗后，自己选球，停在最后一次 **使用 / Use** 确认处。此时不按 A，按住 R 并点一次 SELECT，然后松开两键。
-3. 下排 **8** 搜索、**9** 投球倒计时；到点自动按一次 **A**。**绿色表示当前 advances 与投球按 A 时点奇偶一致，黄色表示不一致**，判断已计入捕获 Offset。凤王的生成仍用 ↑，投球统一用 A。PC 安装会话结束后此功能仍在掌机运行，不需要返回 Mystery Gift 或重新播种。
+3. 下排 **8** 搜索、**9** 投球倒计时；到点自动按一次 **A**。捕获搜索会把相邻的成功候选合并，优先选连续段中心；三连成功时选中间一个。**绿色表示当前 advances 与投球按 A 时点奇偶一致，黄色表示不一致**，奇偶只作提示，由用户手动调整。凤王的生成仍用 ↑，投球统一用 A。PC 安装会话结束后此功能仍在掌机运行，不需要返回 Mystery Gift 或重新播种。
 4. 再按 **R＋SELECT** 可取消，显示 E；在 E 或一次投球后的 C 状态可重新启动搜索。只保持按键不重复启用。取消后不会自动投球。
 5. 目标一经显示就锁定。错过、回调改变或 RNG 检查失败先显示红色 D，约一秒后重新搜索；不会补按旧目标。投球后 C 表示已发送输入，实际捕获结果看游戏。
 
@@ -91,7 +91,7 @@ Games → FireRed & LeafGreen 下只保留两个工具：
 | D00000xx | 错过或按键失败原因，红色显示约 1 秒后在当前阶段的范围内续搜 |
 | E0000000 / F0000000 | 范围耗尽（捕获也可表示取消）/ 计数失效 |
 
-一旦出现 B 或 9 就保留目标，颜色变化不提前换目标。奇偶比较以计入对应 Offset 后的按键时点为准；绿色不代表 Offset 已校准。实际错过才显示 D 并续搜，不补按过期目标；已发按键不再自动续搜。C 表示输入已发出，是否实际触发须观察游戏；捕获可用 R＋SELECT 再次手动启用。
+一旦出现 B 或 9 就保留目标，颜色变化不提前换目标。生成阶段按可达奇偶筛选；捕获阶段优先保留成功段中心，奇偶颜色只报告当前状态，不改写已选中心。奇偶比较以计入对应 Offset 后的按键时点为准；绿色不代表 Offset 已校准。实际错过才显示 D 并续搜，不补按过期目标；已发按键不再自动续搜。C 表示输入已发出，是否实际触发须观察游戏；捕获可用 R＋SELECT 再次手动启用。
 
 | 按键 | 上排 | 下排 |
 | --- | --- | --- |
@@ -124,9 +124,9 @@ D 原因码：04 回调不可用或改变；09 越过按键时机；10 主循环
     python -m ruff check .
     python -m pytest -q
     python scripts/build_guest.py --check
-    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.1.pokeplugin
+    python D:\path\to\pokeldn-v0.39.1\scripts\pack_plugin.py . -o dist\frlg-rng-assist-0.7.2.pokeplugin
 
-重新编译时设置 ARM_TOOLCHAIN 为带末尾分隔符的 ARM 工具目录，运行 scripts/build_guest.py。驻留区仍为 2200 字节：未预载捕获为 2156；预载后的定点 / 野生 / 未知图腾分别为 2032 / 2180 / 2196。安装时按模型选取一个完整版本；不能叠加其他 resident hooks。初始化后复用 first / 初始跳转参数三个 RAM 字作为临时状态，不扩大保留区。物种仍编码为 100 位槽位掩码。插件不写 RNG、宝可梦、存档或 ROM；游戏的解密访问器只接收栈副本。
+重新编译时设置 ARM_TOOLCHAIN 为带末尾分隔符的 ARM 工具目录，运行 scripts/build_guest.py。驻留区仍为 2200 字节：未预载捕获为 2160；预载后的定点 / 野生 / 未知图腾分别为 2048 / 2196 / 2192。安装时按模型选取一个完整版本；不能叠加其他 resident hooks。初始化后复用 first / 初始跳转参数三个 RAM 字作为临时状态，不扩大保留区。物种仍编码为 100 位槽位掩码。插件不写 RNG、宝可梦、存档或 ROM；游戏的解密访问器只接收栈副本。
 
 更新静态遭遇数据时，运行 `python scripts/import_wild_data.py --decomp PATH --pokefinder PATH`。已提交的数据记录来源 commit，用户无需安装这些开发依赖。物种 / 性格译名来源和许可证见 NOTICE。
 

@@ -35,6 +35,20 @@ def test_v27g_verified_legacy_capture_vector_and_minimum_rate():
     assert all(roll < THRESHOLD for roll in lcg.draws(pre, 4)[0])
 
 
+def test_capture_uses_the_middle_of_a_three_start_success_run():
+    c = Console(criteria=Criteria(shiny=False), capture=True)
+    generate(c)
+    c.set_overworld(False)
+    arm(c, c.s("index") + 20)
+    c.s("next", 1234)
+    before = c.s("next")
+    # Six passing draws contain three overlapping four-draw success starts.
+    # Capture selection advances once, to the centre of that three-start run.
+    pre = 0xA420C7D4
+    assert c.call(c.manifest["symbols"]["matches"] | 1, pre) == 1
+    assert c.s("next") == before + 1
+
+
 def test_threshold_equality_is_a_failure():
     lcg, _ = backend()
     # Force the first draw's high half to be exactly the threshold.
